@@ -8,7 +8,8 @@ fn main() {
         eprintln!("usage: newname <old_name> <new_name>");
         return;
     }
-    if let Err(e) = fs::rename(&args[1], &args[2]) {
-        eprintln!("Error renaming file: {}", e);
+    match fs::rename(&args[1], &args[2]) {
+        Ok(()) => println!("Renamed {} to {}", &args[1], &args[2]),
+        Err(e) => eprintln!("Failed to rename {}: {}", &args[1], e),
     }
 }

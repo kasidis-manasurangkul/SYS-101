@@ -4,8 +4,9 @@ use std::fs;
 
 fn main() {
     for arg in env::args().skip(1) {
-        if let Err(e) = fs::remove_file(arg) {
-            eprintln!("Error deleting file: {}", e);
+        match fs::remove_file(&arg) {
+            Ok(()) => println!("Removed {}", &arg),
+            Err(e) => eprintln!("Failed to remove {}: {}", arg, e),
         }
     }
 }

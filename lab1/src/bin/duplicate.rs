@@ -10,5 +10,6 @@ fn main() -> io::Result<()> {
         return Ok(());
     }
     fs::copy(&args[1], &args[2])?;
+    println!("Copied {} to {}", &args[1], &args[2]);
     Ok(())
 }
