@@ -1,0 +1,10 @@
+/home/kasidis-manasurangkul/cmkl/SYS-101/lab5/lab5/target/debug/deps/libfdeflate-f591018887e15755.rmeta: /home/kasidis-manasurangkul/.cargo/registry/src/index.crates.io-6f17d22bba15001f/fdeflate-0.3.4/src/lib.rs /home/kasidis-manasurangkul/.cargo/registry/src/index.crates.io-6f17d22bba15001f/fdeflate-0.3.4/src/compress.rs /home/kasidis-manasurangkul/.cargo/registry/src/index.crates.io-6f17d22bba15001f/fdeflate-0.3.4/src/decompress.rs /home/kasidis-manasurangkul/.cargo/registry/src/index.crates.io-6f17d22bba15001f/fdeflate-0.3.4/src/tables.rs
+
+/home/kasidis-manasurangkul/cmkl/SYS-101/lab5/lab5/target/debug/deps/libfdeflate-f591018887e15755.rlib: /home/kasidis-manasurangkul/.cargo/registry/src/index.crates.io-6f17d22bba15001f/fdeflate-0.3.4/src/lib.rs /home/kasidis-manasurangkul/.cargo/registry/src/index.crates.io-6f17d22bba15001f/fdeflate-0.3.4/src/compress.rs /home/kasidis-manasurangkul/.cargo/registry/src/index.crates.io-6f17d22bba15001f/fdeflate-0.3.4/src/decompress.rs /home/kasidis-manasurangkul/.cargo/registry/src/index.crates.io-6f17d22bba15001f/fdeflate-0.3.4/src/tables.rs
+
+/home/kasidis-manasurangkul/cmkl/SYS-101/lab5/lab5/target/debug/deps/fdeflate-f591018887e15755.d: /home/kasidis-manasurangkul/.cargo/registry/src/index.crates.io-6f17d22bba15001f/fdeflate-0.3.4/src/lib.rs /home/kasidis-manasurangkul/.cargo/registry/src/index.crates.io-6f17d22bba15001f/fdeflate-0.3.4/src/compress.rs /home/kasidis-manasurangkul/.cargo/registry/src/index.crates.io-6f17d22bba15001f/fdeflate-0.3.4/src/decompress.rs /home/kasidis-manasurangkul/.cargo/registry/src/index.crates.io-6f17d22bba15001f/fdeflate-0.3.4/src/tables.rs
+
+/home/kasidis-manasurangkul/.cargo/registry/src/index.crates.io-6f17d22bba15001f/fdeflate-0.3.4/src/lib.rs:
+/home/kasidis-manasurangkul/.cargo/registry/src/index.crates.io-6f17d22bba15001f/fdeflate-0.3.4/src/compress.rs:
+/home/kasidis-manasurangkul/.cargo/registry/src/index.crates.io-6f17d22bba15001f/fdeflate-0.3.4/src/decompress.rs:
+/home/kasidis-manasurangkul/.cargo/registry/src/index.crates.io-6f17d22bba15001f/fdeflate-0.3.4/src/tables.rs:

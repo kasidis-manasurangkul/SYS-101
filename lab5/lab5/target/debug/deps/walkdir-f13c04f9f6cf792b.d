@@ -1,0 +1,10 @@
+/home/kasidis-manasurangkul/cmkl/SYS-101/lab5/lab5/target/debug/deps/libwalkdir-f13c04f9f6cf792b.rmeta: /home/kasidis-manasurangkul/.cargo/registry/src/index.crates.io-6f17d22bba15001f/walkdir-2.5.0/src/lib.rs /home/kasidis-manasurangkul/.cargo/registry/src/index.crates.io-6f17d22bba15001f/walkdir-2.5.0/src/dent.rs /home/kasidis-manasurangkul/.cargo/registry/src/index.crates.io-6f17d22bba15001f/walkdir-2.5.0/src/error.rs /home/kasidis-manasurangkul/.cargo/registry/src/index.crates.io-6f17d22bba15001f/walkdir-2.5.0/src/util.rs
+
+/home/kasidis-manasurangkul/cmkl/SYS-101/lab5/lab5/target/debug/deps/libwalkdir-f13c04f9f6cf792b.rlib: /home/kasidis-manasurangkul/.cargo/registry/src/index.crates.io-6f17d22bba15001f/walkdir-2.5.0/src/lib.rs /home/kasidis-manasurangkul/.cargo/registry/src/index.crates.io-6f17d22bba15001f/walkdir-2.5.0/src/dent.rs /home/kasidis-manasurangkul/.cargo/registry/src/index.crates.io-6f17d22bba15001f/walkdir-2.5.0/src/error.rs /home/kasidis-manasurangkul/.cargo/registry/src/index.crates.io-6f17d22bba15001f/walkdir-2.5.0/src/util.rs
+
+/home/kasidis-manasurangkul/cmkl/SYS-101/lab5/lab5/target/debug/deps/walkdir-f13c04f9f6cf792b.d: /home/kasidis-manasurangkul/.cargo/registry/src/index.crates.io-6f17d22bba15001f/walkdir-2.5.0/src/lib.rs /home/kasidis-manasurangkul/.cargo/registry/src/index.crates.io-6f17d22bba15001f/walkdir-2.5.0/src/dent.rs /home/kasidis-manasurangkul/.cargo/registry/src/index.crates.io-6f17d22bba15001f/walkdir-2.5.0/src/error.rs /home/kasidis-manasurangkul/.cargo/registry/src/index.crates.io-6f17d22bba15001f/walkdir-2.5.0/src/util.rs
+
+/home/kasidis-manasurangkul/.cargo/registry/src/index.crates.io-6f17d22bba15001f/walkdir-2.5.0/src/lib.rs:
+/home/kasidis-manasurangkul/.cargo/registry/src/index.crates.io-6f17d22bba15001f/walkdir-2.5.0/src/dent.rs:
+/home/kasidis-manasurangkul/.cargo/registry/src/index.crates.io-6f17d22bba15001f/walkdir-2.5.0/src/error.rs:
+/home/kasidis-manasurangkul/.cargo/registry/src/index.crates.io-6f17d22bba15001f/walkdir-2.5.0/src/util.rs:

@@ -1,0 +1,10 @@
+/home/kasidis-manasurangkul/cmkl/SYS-101/lab5/lab5/target/debug/deps/liblog-d96f4592d0a4e108.rmeta: /home/kasidis-manasurangkul/.cargo/registry/src/index.crates.io-6f17d22bba15001f/log-0.4.21/src/lib.rs /home/kasidis-manasurangkul/.cargo/registry/src/index.crates.io-6f17d22bba15001f/log-0.4.21/src/macros.rs /home/kasidis-manasurangkul/.cargo/registry/src/index.crates.io-6f17d22bba15001f/log-0.4.21/src/serde.rs /home/kasidis-manasurangkul/.cargo/registry/src/index.crates.io-6f17d22bba15001f/log-0.4.21/src/__private_api.rs
+
+/home/kasidis-manasurangkul/cmkl/SYS-101/lab5/lab5/target/debug/deps/liblog-d96f4592d0a4e108.rlib: /home/kasidis-manasurangkul/.cargo/registry/src/index.crates.io-6f17d22bba15001f/log-0.4.21/src/lib.rs /home/kasidis-manasurangkul/.cargo/registry/src/index.crates.io-6f17d22bba15001f/log-0.4.21/src/macros.rs /home/kasidis-manasurangkul/.cargo/registry/src/index.crates.io-6f17d22bba15001f/log-0.4.21/src/serde.rs /home/kasidis-manasurangkul/.cargo/registry/src/index.crates.io-6f17d22bba15001f/log-0.4.21/src/__private_api.rs
+
+/home/kasidis-manasurangkul/cmkl/SYS-101/lab5/lab5/target/debug/deps/log-d96f4592d0a4e108.d: /home/kasidis-manasurangkul/.cargo/registry/src/index.crates.io-6f17d22bba15001f/log-0.4.21/src/lib.rs /home/kasidis-manasurangkul/.cargo/registry/src/index.crates.io-6f17d22bba15001f/log-0.4.21/src/macros.rs /home/kasidis-manasurangkul/.cargo/registry/src/index.crates.io-6f17d22bba15001f/log-0.4.21/src/serde.rs /home/kasidis-manasurangkul/.cargo/registry/src/index.crates.io-6f17d22bba15001f/log-0.4.21/src/__private_api.rs
+
+/home/kasidis-manasurangkul/.cargo/registry/src/index.crates.io-6f17d22bba15001f/log-0.4.21/src/lib.rs:
+/home/kasidis-manasurangkul/.cargo/registry/src/index.crates.io-6f17d22bba15001f/log-0.4.21/src/macros.rs:
+/home/kasidis-manasurangkul/.cargo/registry/src/index.crates.io-6f17d22bba15001f/log-0.4.21/src/serde.rs:
+/home/kasidis-manasurangkul/.cargo/registry/src/index.crates.io-6f17d22bba15001f/log-0.4.21/src/__private_api.rs:

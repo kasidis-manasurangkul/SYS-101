@@ -1,0 +1,12 @@
+Type,Parameter,Time
+"ApproximationFactor",1,2764
+"ApproximationFactor",2,2296
+"ApproximationFactor",4,1914
+"ApproximationFactor",8,1695
+"ApproximationFactor",16,1531
+"ApproximationFactor",32,1610
+"ApproximationFactor",64,1559
+"ApproximationFactor",128,1554
+"ApproximationFactor",256,1463
+"ApproximationFactor",512,1560
+"ApproximationFactor",1024,1443
