@@ -70,7 +70,7 @@ use spin::Mutex;
 
 lazy_static! {
     static ref PLAYER: Mutex<Player> = Mutex::new(Player::new(50, 50, 40, 40, (0xff, 0, 0)));
-    static ref ENEMY: Mutex<Enemy> = Mutex::new(Enemy::new(50, 50, 40, 40, (0, 0, 0xff)));
+    static ref ENEMIES: Mutex<RefCell<[Option<Enemy>; 15]>> = Mutex::new(RefCell::new(init_enemy_array()));
     // array of bullets
     static ref BULLETS: Mutex<RefCell<[Option<Bullet>; 10]>> = Mutex::new(RefCell::new(init_bullet_array()));
 }
@@ -99,6 +99,12 @@ fn start() {
     player.x = center_x - player_width / 2;
     player.y = center_y - player_height / 2;
     player.draw(screenwriter());
+
+    let mut enemies_guard = ENEMIES.lock();
+    let mut enemies = enemies_guard.borrow_mut();
+    for i in 0..enemies.len() {
+        enemies[i] = Some(Enemy::new(i * 60 , 5, 40, 40, (0, 0, 0xff)));
+    }
 }
 
 fn tick() {
@@ -116,7 +122,7 @@ fn key(key: DecodedKey) {
             let frame_info = screenwriter().info;
             match code {
                 pc_keyboard::KeyCode::ArrowLeft if player.x > 0 => {
-                    write!(Writer, "left").unwrap();
+                    // write!(Writer, "left").unwrap();
                     player_move_left(&mut player);
                 }
                 pc_keyboard::KeyCode::ArrowRight if player.x + player.width < frame_info.width => {
@@ -204,6 +210,11 @@ pub struct Enemy {
     pub width: usize,
     pub height: usize,
     pub color: (u8, u8, u8),
+}
+
+const ARRAY_REPEAT_VALUE: Option<Enemy> = None;
+fn init_enemy_array() -> [Option<Enemy>; 15] {
+    [ARRAY_REPEAT_VALUE; 15] // Initialize all enemies to None
 }
 
 impl Enemy {
@@ -308,12 +319,17 @@ fn redraw_player(player: &Player) {
 
 fn enemy_movement() {
     let mut writer = screenwriter();
-    let mut enemy = ENEMY.lock();
-    enemy.erase(&mut writer, (0, 0, 0));
-    enemy.x += 10;
-
-    enemy.draw(&mut writer);
+    let mut enemies_guard = ENEMIES.lock();
+    let mut enemies = enemies_guard.borrow_mut();
+    for enemy_opt in enemies.iter_mut() {
+        if let Some(enemy) = enemy_opt {
+            enemy.erase(&mut writer, (0, 0, 0));
+            enemy.x += 1; // Move vertically
+            enemy.draw(&mut writer);
+        }
+    }
 }
+
 fn player_move_left(player: &mut Player) {
     let mut writer = screenwriter();
     player.erase(&mut writer, (0, 0, 0));
