@@ -6,9 +6,9 @@ extern crate alloc;
 
 mod allocator;
 mod screen;
-
 use crate::screen::screenwriter;
 use crate::screen::ScreenWriter;
+use core::cell::RefCell;
 use core::fmt::Write;
 // use alloc::boxed::Box;
 use bootloader_api::config::Mapping::Dynamic;
@@ -71,6 +71,8 @@ use spin::Mutex;
 lazy_static! {
     static ref PLAYER: Mutex<Player> = Mutex::new(Player::new(50, 50, 40, 40, (0xff, 0, 0)));
     static ref ENEMY: Mutex<Enemy> = Mutex::new(Enemy::new(50, 50, 40, 40, (0, 0, 0xff)));
+    // array of bullets
+    static ref BULLETS: Mutex<RefCell<[Option<Bullet>; 10]>> = Mutex::new(RefCell::new(init_bullet_array()));
 }
 
 pub unsafe fn active_level_4_table(physical_memory_offset: VirtAddr) -> &'static mut PageTable {
@@ -100,10 +102,12 @@ fn start() {
 }
 
 fn tick() {
+    bullet_movement();
     enemy_movement();
 }
 
 fn key(key: DecodedKey) {
+    // write!(screenwriter(), "{:?}", key).unwrap();
     let mut player = PLAYER.lock();
     // *player_moved = true;
     let Writer = screenwriter();
@@ -112,16 +116,37 @@ fn key(key: DecodedKey) {
             let frame_info = screenwriter().info;
             match code {
                 pc_keyboard::KeyCode::ArrowLeft if player.x > 0 => {
-                    // write!(Writer, "left").unwrap();
-                    move_left(&mut player);
+                    write!(Writer, "left").unwrap();
+                    player_move_left(&mut player);
                 }
                 pc_keyboard::KeyCode::ArrowRight if player.x + player.width < frame_info.width => {
-                    move_right(&mut player);
+                    player_move_right(&mut player);
                 }
                 _ => {}
             }
         }
-        _ => {}
+        DecodedKey::Unicode(character) => {
+            if character == ' ' {
+                // Handle space bar press
+                let mut bullets_guard = BULLETS.lock();
+                let mut bullets = bullets_guard.borrow_mut();
+                // if bullet is more than 10, don't add more
+                if bullets.iter().filter(|x| x.is_some()).count() < 10 {
+                for bullet in bullets.iter_mut() {
+                    if bullet.is_none() {
+                        *bullet = Some(Bullet::new(
+                            player.x + player.width / 2,
+                            player.y -5,
+                            5,
+                            5,
+                            (0, 0xff, 0),
+                        ));
+                        break;
+                    }
+                }
+            }
+            }
+        }
     }
 }
 
@@ -220,6 +245,62 @@ impl Enemy {
     }
 }
 
+struct Bullet {
+    x: usize,
+    y: usize,
+    width: usize,
+    height: usize,
+    color: (u8, u8, u8),
+}
+
+fn init_bullet_array() -> [Option<Bullet>; 10] {
+    let mut bullets = [None, None, None, None, None, None, None, None, None, None];
+    // Alternatively, you can use a loop to initialize each element to None
+    for bullet in bullets.iter_mut() {
+        *bullet = None;
+    }
+    bullets
+}
+
+impl Bullet {
+    pub fn new(x: usize, y: usize, width: usize, height: usize, color: (u8, u8, u8)) -> Self {
+        Bullet {
+            x,
+            y,
+            width,
+            height,
+            color,
+        }
+    }
+
+    pub fn draw(&self, writer: &mut ScreenWriter) {
+        for dx in 0..self.width {
+            for dy in 0..self.height {
+                writer.draw_pixel(
+                    self.x + dx,
+                    self.y + dy,
+                    self.color.0,
+                    self.color.1,
+                    self.color.2,
+                );
+            }
+        }
+    }
+    pub fn erase(&self, writer: &mut ScreenWriter, background_color: (u8, u8, u8)) {
+        for dx in 0..self.width {
+            for dy in 0..self.height {
+                writer.draw_pixel(
+                    self.x + dx,
+                    self.y + dy,
+                    background_color.0,
+                    background_color.1,
+                    background_color.2,
+                );
+            }
+        }
+    }
+}
+
 fn redraw_player(player: &Player) {
     screenwriter().clear(); // Clear the screen
     player.draw(screenwriter()); // Draw the player at the new position
@@ -233,16 +314,35 @@ fn enemy_movement() {
 
     enemy.draw(&mut writer);
 }
-fn move_left(player: &mut Player) {
+fn player_move_left(player: &mut Player) {
     let mut writer = screenwriter();
     player.erase(&mut writer, (0, 0, 0));
     player.x -= 10;
     player.draw(&mut writer);
 }
 
-fn move_right(player: &mut Player) {
+fn player_move_right(player: &mut Player) {
     let mut writer = screenwriter();
     player.erase(&mut writer, (0, 0, 0));
     player.x += 10;
     player.draw(&mut writer);
+}
+
+// loop through all the bullets and move them up
+fn bullet_movement() {
+    let mut writer = screenwriter();
+    let mut bullets_guard = BULLETS.lock();
+    let mut bullets = bullets_guard.borrow_mut();
+    for bullet_opt in bullets.iter_mut() {
+        if let Some(bullet) = bullet_opt {
+            bullet.erase(&mut writer, (0, 0, 0));
+            // write!(writer, "Bullet x: {}, y: {}", bullet.x, bullet.y).unwrap();
+            if bullet.y > 5 {
+                bullet.y -= 10;
+                bullet.draw(&mut writer);
+            } else {
+                *bullet_opt = None;  // Remove the bullet if it goes out of screen
+            }
+        }
+    }
 }
