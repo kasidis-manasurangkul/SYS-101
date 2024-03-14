@@ -4,18 +4,19 @@
 
 extern crate alloc;
 
-mod screen;
-use crate::screen::Player;
 mod allocator;
+mod screen;
 
-use crate::screen::{screenwriter, Writer};
-use alloc::boxed::Box;
+use crate::screen::screenwriter;
+use crate::screen::ScreenWriter;
+use core::fmt::Write;
+// use alloc::boxed::Box;
 use bootloader_api::config::Mapping::Dynamic;
 use bootloader_api::info::MemoryRegionKind;
 use bootloader_api::{entry_point, BootInfo, BootloaderConfig};
-use core::fmt::Write;
+// use core::fmt::Write;
 use core::slice;
-use kernel::{serial, HandlerTable};
+use kernel::HandlerTable;
 use pc_keyboard::DecodedKey;
 use x86_64::registers::control::Cr3;
 use x86_64::structures::paging::PageTable;
@@ -31,7 +32,7 @@ const BOOTLOADER_CONFIG: BootloaderConfig = {
 entry_point!(kernel_main, config = &BOOTLOADER_CONFIG);
 
 fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
-    let frame_info = boot_info.framebuffer.as_ref().unwrap().info();
+    // let frame_info = boot_info.framebuffer.as_ref().unwrap().info();
     let framebuffer = boot_info.framebuffer.as_mut().unwrap();
     screen::init(framebuffer);
 
@@ -51,9 +52,9 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     //read CR3 for current page table
     let cr3 = Cr3::read().0.start_address().as_u64();
 
-    let cr3_page = unsafe { slice::from_raw_parts_mut((cr3 + physical_offset) as *mut usize, 6) };
+    let _cr3_page = unsafe { slice::from_raw_parts_mut((cr3 + physical_offset) as *mut usize, 6) };
 
-    let l4_table = unsafe { active_level_4_table(VirtAddr::new(physical_offset)) };
+    let _l4_table = unsafe { active_level_4_table(VirtAddr::new(physical_offset)) };
 
     allocator::init_heap((physical_offset + usable_region.start) as usize, HEAP_SIZE);
 
@@ -68,7 +69,8 @@ use lazy_static::lazy_static;
 use spin::Mutex;
 
 lazy_static! {
-    static ref PLAYER: Mutex<Player> = Mutex::new(Player::new(50, 50, 20, 20, (0xff, 0, 0)));
+    static ref PLAYER: Mutex<Player> = Mutex::new(Player::new(50, 50, 40, 40, (0xff, 0, 0)));
+    static ref ENEMY: Mutex<Enemy> = Mutex::new(Enemy::new(50, 50, 40, 40, (0, 0, 0xff)));
 }
 
 pub unsafe fn active_level_4_table(physical_memory_offset: VirtAddr) -> &'static mut PageTable {
@@ -81,44 +83,166 @@ pub unsafe fn active_level_4_table(physical_memory_offset: VirtAddr) -> &'static
     &mut *page_table_ptr // unsafe
 }
 fn start() {
-            // Assuming the Writer and screenwriter() are properly initialized
-        let frame_info = screenwriter().info;
-        let center_x = frame_info.width / 2;
-        let center_y = frame_info.height / 2;
+    // Assuming the Writer and screenwriter() are properly initialized
+    let frame_info = screenwriter().info;
+    let center_x = frame_info.width / 2;
+    let center_y = frame_info.height - 100;
 
-        // Define player size
-        let player_width = 20; // Width of the player
-        let player_height = 20; // Height of the player
+    // Define player size
+    let player_width = 40; // Width of the player
+    let player_height = 40; // Height of the player
 
-        // Calculate top-left corner of the player
-        let player_x = center_x - player_width / 2;
-        let player_y = center_y - player_height / 2;
-
-        // Create and draw the player
-        let player = Player::new(
-            player_x,
-            player_y,
-            player_width,
-            player_height,
-            (0xff, 0, 0),
-        ); // red color
-        player.draw(screenwriter());
-    loop {
-        // Draw the player at the new position
-        let player = PLAYER.lock();
-        player.draw(screenwriter());
-    }
+    // Create and draw the player
+    let mut player = PLAYER.lock();
+    player.x = center_x - player_width / 2;
+    player.y = center_y - player_height / 2;
+    player.draw(screenwriter());
 }
 
-fn tick() {}
+fn tick() {
+    enemy_movement();
+}
 
 fn key(key: DecodedKey) {
     let mut player = PLAYER.lock();
+    // *player_moved = true;
+    let Writer = screenwriter();
     match key {
-        DecodedKey::Unicode('w') => player.y = player.y.saturating_sub(100), // Move up
-        DecodedKey::Unicode('s') => player.y += 100,                         // Move down
-        DecodedKey::Unicode('a') => player.x = player.x.saturating_sub(100), // Move left
-        DecodedKey::Unicode('d') => player.x += 100,                         // Move right
+        DecodedKey::RawKey(code) => {
+            let frame_info = screenwriter().info;
+            match code {
+                pc_keyboard::KeyCode::ArrowLeft if player.x > 0 => {
+                    // write!(Writer, "left").unwrap();
+                    move_left(&mut player);
+                }
+                pc_keyboard::KeyCode::ArrowRight if player.x + player.width < frame_info.width => {
+                    move_right(&mut player);
+                }
+                _ => {}
+            }
+        }
         _ => {}
     }
+}
+
+pub struct Player {
+    pub x: usize,
+    pub y: usize,
+    pub width: usize,
+    pub height: usize,
+    pub color: (u8, u8, u8),
+}
+
+impl Player {
+    pub fn new(x: usize, y: usize, width: usize, height: usize, color: (u8, u8, u8)) -> Self {
+        Player {
+            x,
+            y,
+            width,
+            height,
+            color,
+        }
+    }
+
+    pub fn draw(&self, writer: &mut ScreenWriter) {
+        for dx in 0..self.width {
+            for dy in 0..self.height {
+                writer.draw_pixel(
+                    self.x + dx,
+                    self.y + dy,
+                    self.color.0,
+                    self.color.1,
+                    self.color.2,
+                );
+            }
+        }
+    }
+
+    pub fn erase(&self, writer: &mut ScreenWriter, background_color: (u8, u8, u8)) {
+        for dx in 0..self.width {
+            for dy in 0..self.height {
+                writer.draw_pixel(
+                    self.x + dx,
+                    self.y + dy,
+                    background_color.0,
+                    background_color.1,
+                    background_color.2,
+                );
+            }
+        }
+    }
+}
+
+pub struct Enemy {
+    pub x: usize,
+    pub y: usize,
+    pub width: usize,
+    pub height: usize,
+    pub color: (u8, u8, u8),
+}
+
+impl Enemy {
+    pub fn new(x: usize, y: usize, width: usize, height: usize, color: (u8, u8, u8)) -> Self {
+        Enemy {
+            x,
+            y,
+            width,
+            height,
+            color,
+        }
+    }
+
+    pub fn draw(&self, writer: &mut ScreenWriter) {
+        for dx in 0..self.width {
+            for dy in 0..self.height {
+                writer.draw_pixel(
+                    self.x + dx,
+                    self.y + dy,
+                    self.color.0,
+                    self.color.1,
+                    self.color.2,
+                );
+            }
+        }
+    }
+    pub fn erase(&self, writer: &mut ScreenWriter, background_color: (u8, u8, u8)) {
+        for dx in 0..self.width {
+            for dy in 0..self.height {
+                writer.draw_pixel(
+                    self.x + dx,
+                    self.y + dy,
+                    background_color.0,
+                    background_color.1,
+                    background_color.2,
+                );
+            }
+        }
+    }
+}
+
+fn redraw_player(player: &Player) {
+    screenwriter().clear(); // Clear the screen
+    player.draw(screenwriter()); // Draw the player at the new position
+}
+
+fn enemy_movement() {
+    let mut writer = screenwriter();
+    let mut enemy = ENEMY.lock();
+    enemy.erase(&mut writer, (0, 0, 0));
+    enemy.x += 10;
+
+    enemy.draw(&mut writer);
+}
+fn move_left(player: &mut Player) {
+    let mut writer = screenwriter();
+    player.erase(&mut writer, (0, 0, 0));
+    player.x -= 10;
+    player.draw(&mut writer);
+}
+
+fn move_right(player: &mut Player) {
+    let mut writer = screenwriter();
+    player.erase(&mut writer, (0, 0, 0));
+    player.x += 10;
+    player.draw(&mut writer);
 }
