@@ -21,7 +21,7 @@ use pc_keyboard::DecodedKey;
 use x86_64::registers::control::Cr3;
 use x86_64::structures::paging::PageTable;
 use x86_64::VirtAddr;
-const HEAP_SIZE: usize = 100 * 1024; // 100 KiB
+const HEAP_SIZE: usize = 1000 * 1024; // 100 KiB
 
 const BOOTLOADER_CONFIG: BootloaderConfig = {
     let mut config = BootloaderConfig::new_default();
@@ -69,8 +69,10 @@ use lazy_static::lazy_static;
 use spin::Mutex;
 
 lazy_static! {
+    // tick counter from one to five
+    static ref TICK_COUNTER: Mutex<u32> = Mutex::new(0);
     static ref PLAYER: Mutex<Player> = Mutex::new(Player::new(50, 50, 40, 40, (0xff, 0, 0)));
-    static ref ENEMIES: Mutex<RefCell<[Option<Enemy>; 15]>> = Mutex::new(RefCell::new(init_enemy_array()));
+    static ref ENEMIES: Mutex<RefCell<[[Option<Enemy>; 15];3]>> = Mutex::new(RefCell::new(init_enemy_array()));
     // array of bullets
     static ref BULLETS: Mutex<RefCell<[Option<Bullet>; 10]>> = Mutex::new(RefCell::new(init_bullet_array()));
 }
@@ -103,13 +105,24 @@ fn start() {
     let mut enemies_guard = ENEMIES.lock();
     let mut enemies = enemies_guard.borrow_mut();
     for i in 0..enemies.len() {
-        enemies[i] = Some(Enemy::new(i * 60 , 5, 40, 40, (0, 0, 0xff)));
+        for j in 0..enemies[i].len() {
+            enemies[i][j] = Some(Enemy::new(j * 50 + 10, i * 50 + 10, 40, 40, (0, 0, 0xff)));
+            enemies[i][j].as_ref().unwrap().draw(screenwriter());
+        }
     }
 }
 
 fn tick() {
+    // Increment the tick counter
+    let mut tick_counter = TICK_COUNTER.lock();
+    *tick_counter += 1;
+    if *tick_counter > 5 {
+        enemy_movement();
+        *tick_counter = 0;
+    } else {
+        *tick_counter += 1;
+    }
     bullet_movement();
-    enemy_movement();
 }
 
 fn key(key: DecodedKey) {
@@ -136,21 +149,18 @@ fn key(key: DecodedKey) {
                 // Handle space bar press
                 let mut bullets_guard = BULLETS.lock();
                 let mut bullets = bullets_guard.borrow_mut();
-                // if bullet is more than 10, don't add more
+                // Add a new bullet if under the limit
                 if bullets.iter().filter(|x| x.is_some()).count() < 10 {
-                for bullet in bullets.iter_mut() {
-                    if bullet.is_none() {
-                        *bullet = Some(Bullet::new(
+                    if let Some(first_empty_slot) = bullets.iter_mut().find(|x| x.is_none()) {
+                        *first_empty_slot = Some(Bullet::new(
                             player.x + player.width / 2,
-                            player.y -5,
+                            player.y - 5,
                             5,
                             5,
                             (0, 0xff, 0),
                         ));
-                        break;
                     }
                 }
-            }
             }
         }
     }
@@ -204,6 +214,7 @@ impl Player {
     }
 }
 
+#[derive(Copy, Clone)]
 pub struct Enemy {
     pub x: usize,
     pub y: usize,
@@ -213,8 +224,8 @@ pub struct Enemy {
 }
 
 const ARRAY_REPEAT_VALUE: Option<Enemy> = None;
-fn init_enemy_array() -> [Option<Enemy>; 15] {
-    [ARRAY_REPEAT_VALUE; 15] // Initialize all enemies to None
+fn init_enemy_array() -> [[Option<Enemy>; 15]; 3] {
+    [[ARRAY_REPEAT_VALUE; 15]; 3] // Initialize all enemies to None
 }
 
 impl Enemy {
@@ -322,10 +333,12 @@ fn enemy_movement() {
     let mut enemies_guard = ENEMIES.lock();
     let mut enemies = enemies_guard.borrow_mut();
     for enemy_opt in enemies.iter_mut() {
-        if let Some(enemy) = enemy_opt {
-            enemy.erase(&mut writer, (0, 0, 0));
-            enemy.x += 1; // Move vertically
-            enemy.draw(&mut writer);
+        for enemy in enemy_opt.iter_mut() {
+            if let Some(enemy) = enemy {
+                enemy.erase(&mut writer, (0, 0, 0));
+                enemy.x += 1;
+                enemy.draw(&mut writer);
+            }
         }
     }
 }
@@ -357,7 +370,7 @@ fn bullet_movement() {
                 bullet.y -= 10;
                 bullet.draw(&mut writer);
             } else {
-                *bullet_opt = None;  // Remove the bullet if it goes out of screen
+                *bullet_opt = None; // Remove the bullet if it goes out of screen
             }
         }
     }
