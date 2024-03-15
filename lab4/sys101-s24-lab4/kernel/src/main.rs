@@ -3,7 +3,7 @@
             // Add this struct definition in your screen.rs file
 
 extern crate alloc;
-
+use alloc::vec::Vec;
 mod allocator;
 mod screen;
 use crate::screen::screenwriter;
@@ -21,12 +21,12 @@ use pc_keyboard::DecodedKey;
 use x86_64::registers::control::Cr3;
 use x86_64::structures::paging::PageTable;
 use x86_64::VirtAddr;
-const HEAP_SIZE: usize = 1000 * 1024; // 100 KiB
+const HEAP_SIZE: usize = 10000 * 1024; // 100 KiB
 
 const BOOTLOADER_CONFIG: BootloaderConfig = {
     let mut config = BootloaderConfig::new_default();
     config.mappings.physical_memory = Some(Dynamic); // obtain physical memory offset
-    config.kernel_stack_size = 256 * 1024; // 256 KiB kernel stack size
+    config.kernel_stack_size = 2560 * 1024; // 256 KiB kernel stack size
     config
 };
 entry_point!(kernel_main, config = &BOOTLOADER_CONFIG);
@@ -67,12 +67,14 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
 
 use lazy_static::lazy_static;
 use spin::Mutex;
-
+// row number
+const ROWS: usize = 3;
 lazy_static! {
     // tick counter from one to five
-    static ref TICK_COUNTER: Mutex<u32> = Mutex::new(0);
+    static ref TICK_COUNTER1: Mutex<u32> = Mutex::new(0);
+    static ref TICK_COUNTER2: Mutex<u32> = Mutex::new(0);
     static ref PLAYER: Mutex<Player> = Mutex::new(Player::new(50, 50, 40, 40, (0xff, 0, 0)));
-    static ref ENEMIES: Mutex<RefCell<[[Option<Enemy>; 15];3]>> = Mutex::new(RefCell::new(init_enemy_array()));
+    static ref ENEMIES: Mutex<RefCell<[[Option<Enemy>; 15];ROWS]>> = Mutex::new(RefCell::new(init_enemy_array()));
     // array of bullets
     static ref BULLETS: Mutex<RefCell<[Option<Bullet>; 10]>> = Mutex::new(RefCell::new(init_bullet_array()));
 }
@@ -114,15 +116,24 @@ fn start() {
 
 fn tick() {
     // Increment the tick counter
-    let mut tick_counter = TICK_COUNTER.lock();
-    *tick_counter += 1;
-    if *tick_counter > 5 {
+    let mut tick_counter1 = TICK_COUNTER1.lock();
+    *tick_counter1 += 1;
+    if *tick_counter1 > 30 {
         enemy_movement();
-        *tick_counter = 0;
+        
+        *tick_counter1 = 0;
     } else {
-        *tick_counter += 1;
+        *tick_counter1 += 1;
     }
-    bullet_movement();
+    let mut tick_counter2 = TICK_COUNTER2.lock();
+    *tick_counter2 += 1;
+    if *tick_counter2 > 5 {
+        bullet_movement();
+        *tick_counter2 = 0;
+    } else {
+        *tick_counter2 += 1;
+    }
+    
 }
 
 fn key(key: DecodedKey) {
@@ -221,21 +232,23 @@ pub struct Enemy {
     pub width: usize,
     pub height: usize,
     pub color: (u8, u8, u8),
+    pub dx: i32, // Movement direction (-1 for left, 1 for right)
 }
 
 const ARRAY_REPEAT_VALUE: Option<Enemy> = None;
-fn init_enemy_array() -> [[Option<Enemy>; 15]; 3] {
-    [[ARRAY_REPEAT_VALUE; 15]; 3] // Initialize all enemies to None
+fn init_enemy_array() -> [[Option<Enemy>; 15]; ROWS] {
+    [[ARRAY_REPEAT_VALUE; 15]; ROWS] // Initialize all enemies to None
 }
 
 impl Enemy {
-    pub fn new(x: usize, y: usize, width: usize, height: usize, color: (u8, u8, u8)) -> Self {
+        pub fn new(x: usize, y: usize, width: usize, height: usize, color: (u8, u8, u8)) -> Self {
         Enemy {
             x,
             y,
             width,
             height,
             color,
+            dx: 1, // Default direction, can be set to -1 if needed
         }
     }
 
@@ -329,49 +342,144 @@ fn redraw_player(player: &Player) {
 }
 
 fn enemy_movement() {
-    let mut writer = screenwriter();
     let mut enemies_guard = ENEMIES.lock();
     let mut enemies = enemies_guard.borrow_mut();
+    // screen size
+    let frame_info = screenwriter().info;
+
+    // Flags to determine if direction change is needed
+    let mut change_to_right = false;
+    let mut change_to_left = false;
+
+    // Determine if direction change is needed
+    if let Some(first_enemy) = enemies[0][0] {
+        if first_enemy.x < 20 {
+            change_to_right = true;
+        }
+    }
+    if let Some(last_enemy) = enemies[0][14] {
+        if last_enemy.x + last_enemy.width > frame_info.width - 20 {
+            change_to_left = true;
+        }
+    }
+
+    let mut writer = screenwriter();
     for enemy_opt in enemies.iter_mut() {
         for enemy in enemy_opt.iter_mut() {
             if let Some(enemy) = enemy {
                 enemy.erase(&mut writer, (0, 0, 0));
-                enemy.x += 1;
+
+                // Update direction based on the flags
+                if change_to_right {
+                    enemy.dx = 1;
+                }
+                if change_to_left {
+                    enemy.dx = -1;
+                }
+
+                // Move the enemy
+                if enemy.dx == 1 {
+                    enemy.x += 15;
+                } else {
+                    enemy.x -= 15;
+                }
+
                 enemy.draw(&mut writer);
             }
         }
     }
 }
 
+
 fn player_move_left(player: &mut Player) {
     let mut writer = screenwriter();
     player.erase(&mut writer, (0, 0, 0));
-    player.x -= 10;
+    if player.x >= 10 {
+        player.x -= 10;
+    } else {
+        player.x = 0; // Prevent overflow by setting to minimum value
+    }
     player.draw(&mut writer);
 }
-
 fn player_move_right(player: &mut Player) {
     let mut writer = screenwriter();
+    // get screen size
+    let frame_info = screenwriter().info;
     player.erase(&mut writer, (0, 0, 0));
-    player.x += 10;
+    if player.x + player.width < frame_info.width - 10{
+        player.x += 10;
+    } else {
+        player.x = frame_info.width -10 - player.width; // Prevent overflow by setting to maximum value
+    }
     player.draw(&mut writer);
 }
 
-// loop through all the bullets and move them up
+fn check_collision(bullet: &Bullet, enemy: &Enemy) -> bool {
+    let bullet_right = bullet.x + bullet.width;
+    let bullet_bottom = bullet.y + bullet.height;
+    let enemy_right = enemy.x + enemy.width;
+    let enemy_bottom = enemy.y + enemy.height;
+
+    !(bullet.x > enemy_right || bullet_right < enemy.x || bullet.y > enemy_bottom || bullet_bottom < enemy.y)
+}
+
 fn bullet_movement() {
     let mut writer = screenwriter();
     let mut bullets_guard = BULLETS.lock();
     let mut bullets = bullets_guard.borrow_mut();
-    for bullet_opt in bullets.iter_mut() {
+    let mut enemies_guard = ENEMIES.lock();
+    let mut enemies = enemies_guard.borrow_mut();
+
+    // Detection Phase: Identify bullets and enemies to remove
+    let mut bullets_to_remove = Vec::new();
+    let mut enemies_to_remove = Vec::new();
+
+    for (i, bullet_opt) in bullets.iter_mut().enumerate() {
         if let Some(bullet) = bullet_opt {
             bullet.erase(&mut writer, (0, 0, 0));
-            // write!(writer, "Bullet x: {}, y: {}", bullet.x, bullet.y).unwrap();
-            if bullet.y > 5 {
-                bullet.y -= 10;
-                bullet.draw(&mut writer);
+            if bullet.y > 20 {
+                bullet.y -= 20;
+                for (j, enemy_opt) in enemies.iter_mut().enumerate() {
+                    for (k, enemy) in enemy_opt.iter_mut().enumerate() {
+                        if let Some(enemy) = enemy {
+                            if check_collision(bullet, enemy) {
+                                bullets_to_remove.push(i);
+                                enemies_to_remove.push((j, k));
+                                // erase the enemy which is hit
+                                enemy.erase(&mut writer, (0, 0, 0));
+                            }
+                        }
+                    }
+                }
             } else {
-                *bullet_opt = None; // Remove the bullet if it goes out of screen
+                bullets_to_remove.push(i); // Remove bullet if it goes out of screen
+            }
+        }
+    }
+
+    // Modification Phase: Remove marked bullets and enemies
+    for &i in bullets_to_remove.iter() {
+        bullets[i] = None;
+    }
+    for (i, j) in enemies_to_remove.iter() {
+        enemies[*i][*j] = None;
+    }
+
+    // Redraw remaining bullets
+    for bullet_opt in bullets.iter() {
+        if let Some(bullet) = bullet_opt {
+            bullet.draw(&mut writer);
+        }
+    }
+
+    // Redraw remaining enemies
+    for enemy_opt in enemies.iter_mut() {
+        for enemy in enemy_opt.iter_mut() {
+            if let Some(enemy) = enemy {
+                enemy.erase(&mut writer, (0, 0, 0));
+                enemy.draw(&mut writer);
             }
         }
     }
 }
+
