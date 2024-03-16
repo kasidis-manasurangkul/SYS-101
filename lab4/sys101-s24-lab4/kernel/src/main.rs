@@ -68,13 +68,17 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
 use lazy_static::lazy_static;
 use spin::Mutex;
 // row number
-const ROWS: usize = 3;
+const ROWS: usize = 4;
 lazy_static! {
     // tick counter from one to five
     static ref TICK_COUNTER1: Mutex<u32> = Mutex::new(0);
     static ref TICK_COUNTER2: Mutex<u32> = Mutex::new(0);
+    
     static ref PLAYER: Mutex<Player> = Mutex::new(Player::new(50, 50, 40, 40, (0xff, 0, 0)));
     static ref ENEMIES: Mutex<RefCell<[[Option<Enemy>; 15];ROWS]>> = Mutex::new(RefCell::new(init_enemy_array()));
+    // enemy movement direction (1 for right, -1 for left)
+    static ref ENEMY_DX: Mutex<i32> = Mutex::new(1);
+    static ref ENEMY_BORDER: Mutex<(usize, usize)> = Mutex::new((0, 0));
     // array of bullets
     static ref BULLETS: Mutex<RefCell<[Option<Bullet>; 10]>> = Mutex::new(RefCell::new(init_bullet_array()));
 }
@@ -91,6 +95,7 @@ pub unsafe fn active_level_4_table(physical_memory_offset: VirtAddr) -> &'static
 fn start() {
     // Assuming the Writer and screenwriter() are properly initialized
     let frame_info = screenwriter().info;
+    write!(screenwriter(), "frame width: {}\n", frame_info.width).unwrap();
     let center_x = frame_info.width / 2;
     let center_y = frame_info.height - 100;
 
@@ -106,8 +111,18 @@ fn start() {
 
     let mut enemies_guard = ENEMIES.lock();
     let mut enemies = enemies_guard.borrow_mut();
+    let mut enemy_border = ENEMY_BORDER.lock();
+
     for i in 0..enemies.len() {
         for j in 0..enemies[i].len() {
+            if i == 0 && j == 0 {
+                enemy_border.0 = j *50 + 10;
+                // write!(screenwriter(), "border0: {}", enemy_border.0).unwrap();
+            }
+            if i == 0 && j == enemies[i].len() - 1 {
+                enemy_border.1 = j * 50 + 10;
+                // write!(screenwriter(), "border1: {}", enemy_border.1).unwrap();
+            }
             enemies[i][j] = Some(Enemy::new(j * 50 + 10, i * 50 + 10, 40, 40, (0, 0, 0xff)));
             enemies[i][j].as_ref().unwrap().draw(screenwriter());
         }
@@ -232,7 +247,6 @@ pub struct Enemy {
     pub width: usize,
     pub height: usize,
     pub color: (u8, u8, u8),
-    pub dx: i32, // Movement direction (-1 for left, 1 for right)
 }
 
 const ARRAY_REPEAT_VALUE: Option<Enemy> = None;
@@ -248,7 +262,6 @@ impl Enemy {
             width,
             height,
             color,
-            dx: 1, // Default direction, can be set to -1 if needed
         }
     }
 
@@ -344,23 +357,17 @@ fn redraw_player(player: &Player) {
 fn enemy_movement() {
     let mut enemies_guard = ENEMIES.lock();
     let mut enemies = enemies_guard.borrow_mut();
-    // screen size
+    let mut enemy_dx = ENEMY_DX.lock();
     let frame_info = screenwriter().info;
 
-    // Flags to determine if direction change is needed
-    let mut change_to_right = false;
-    let mut change_to_left = false;
+    // Find the positions of the foremost enemies
+    let (first_x, last_x) = find_foremost_enemies_positions(&*enemies);
 
     // Determine if direction change is needed
-    if let Some(first_enemy) = enemies[0][0] {
-        if first_enemy.x < 20 {
-            change_to_right = true;
-        }
-    }
-    if let Some(last_enemy) = enemies[0][14] {
-        if last_enemy.x + last_enemy.width > frame_info.width - 20 {
-            change_to_left = true;
-        }
+    if first_x < 20 && *enemy_dx == -1 {
+        *enemy_dx = 1; // Change to moving right
+    } else if last_x + 40 > frame_info.width - 20 && *enemy_dx == 1 { // assuming enemy width is 40
+        *enemy_dx = -1; // Change to moving left
     }
 
     let mut writer = screenwriter();
@@ -368,27 +375,29 @@ fn enemy_movement() {
         for enemy in enemy_opt.iter_mut() {
             if let Some(enemy) = enemy {
                 enemy.erase(&mut writer, (0, 0, 0));
-
-                // Update direction based on the flags
-                if change_to_right {
-                    enemy.dx = 1;
-                }
-                if change_to_left {
-                    enemy.dx = -1;
-                }
-
-                // Move the enemy
-                if enemy.dx == 1 {
-                    enemy.x += 15;
-                } else {
-                    enemy.x -= 15;
-                }
-
+                enemy.x = (enemy.x as i32 + *enemy_dx * 15) as usize; // Move the enemy
                 enemy.draw(&mut writer);
             }
         }
     }
 }
+
+fn find_foremost_enemies_positions(enemies: &[[Option<Enemy>; 15]]) -> (usize, usize) {
+    let mut first_x = usize::MAX;
+    let mut last_x = 0;
+
+    for row in enemies {
+        if let Some(first_enemy) = row.iter().find(|e| e.is_some()).and_then(|e| e.as_ref()) {
+            first_x = first_x.min(first_enemy.x);
+        }
+        if let Some(last_enemy) = row.iter().rev().find(|e| e.is_some()).and_then(|e| e.as_ref()) {
+            last_x = last_x.max(last_enemy.x);
+        }
+    }
+
+    (first_x, last_x)
+}
+
 
 
 fn player_move_left(player: &mut Player) {
