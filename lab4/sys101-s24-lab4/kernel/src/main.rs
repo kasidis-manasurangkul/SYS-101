@@ -93,9 +93,7 @@ pub unsafe fn active_level_4_table(physical_memory_offset: VirtAddr) -> &'static
     &mut *page_table_ptr // unsafe
 }
 fn start() {
-    // Assuming the Writer and screenwriter() are properly initialized
     let frame_info = screenwriter().info;
-    write!(screenwriter(), "frame width: {}\n", frame_info.width).unwrap();
     let center_x = frame_info.width / 2;
     let center_y = frame_info.height - 100;
 
@@ -111,29 +109,43 @@ fn start() {
 
     let mut enemies_guard = ENEMIES.lock();
     let mut enemies = enemies_guard.borrow_mut();
-    let mut enemy_border = ENEMY_BORDER.lock();
+    
+    // Enemy and spacing dimensions
+    let enemy_width = 40;
+    let enemy_height = 40;
+    let horizontal_spacing = 10;
+    let vertical_spacing = 10;
+    let enemy_color = (0, 0, 0xff);
 
-    for i in 0..enemies.len() {
-        for j in 0..enemies[i].len() {
-            if i == 0 && j == 0 {
-                enemy_border.0 = j *50 + 10;
-                // write!(screenwriter(), "border0: {}", enemy_border.0).unwrap();
-            }
-            if i == 0 && j == enemies[i].len() - 1 {
-                enemy_border.1 = j * 50 + 10;
-                // write!(screenwriter(), "border1: {}", enemy_border.1).unwrap();
-            }
-            enemies[i][j] = Some(Enemy::new(j * 50 + 10, i * 50 + 10, 40, 40, (0, 0, 0xff)));
-            enemies[i][j].as_ref().unwrap().draw(screenwriter());
+    // Calculate the total width required for enemies including spacing
+    let total_enemies_width = (enemy_width + horizontal_spacing) * 15 - horizontal_spacing;
+    let start_x = (frame_info.width - total_enemies_width) / 2;
+
+    // Draw enemies with spacing
+    let mut writer = screenwriter();
+    for i in 0..ROWS {
+        for j in 0..15 {
+            let enemy_x = start_x + j * (enemy_width + horizontal_spacing);
+            let enemy_y = 50 + i * (enemy_height + vertical_spacing);
+            enemies[i][j] = Some(Enemy::new(
+                enemy_x,
+                enemy_y,
+                enemy_width,
+                enemy_height,
+                enemy_color,
+            ));
+            enemies[i][j].as_ref().unwrap().draw(&mut writer);
         }
     }
+    // Rest of the function...
 }
+
 
 fn tick() {
     // Increment the tick counter
     let mut tick_counter1 = TICK_COUNTER1.lock();
     *tick_counter1 += 1;
-    if *tick_counter1 > 30 {
+    if *tick_counter1 > 40 {
         enemy_movement();
         
         *tick_counter1 = 0;
@@ -439,37 +451,47 @@ fn bullet_movement() {
     let mut enemies_guard = ENEMIES.lock();
     let mut enemies = enemies_guard.borrow_mut();
 
-    // Detection Phase: Identify bullets and enemies to remove
     let mut bullets_to_remove = Vec::new();
     let mut enemies_to_remove = Vec::new();
 
     for (i, bullet_opt) in bullets.iter_mut().enumerate() {
         if let Some(bullet) = bullet_opt {
             bullet.erase(&mut writer, (0, 0, 0));
-            if bullet.y > 20 {
-                bullet.y -= 20;
+
+            // Check if bullet goes out of screen or collides
+            if bullet.y <= 30 {
+                bullets_to_remove.push(i);  // Bullet goes out of screen
+            } else {
+                bullet.y -= 30;  // Move bullet
+                let mut hit = false;
+
                 for (j, enemy_opt) in enemies.iter_mut().enumerate() {
                     for (k, enemy) in enemy_opt.iter_mut().enumerate() {
                         if let Some(enemy) = enemy {
                             if check_collision(bullet, enemy) {
-                                bullets_to_remove.push(i);
                                 enemies_to_remove.push((j, k));
-                                // erase the enemy which is hit
+                                hit = true;
                                 enemy.erase(&mut writer, (0, 0, 0));
+                                break;
                             }
                         }
                     }
+
+                    if hit {
+                        bullets_to_remove.push(i);
+                        break;
+                    }
                 }
-            } else {
-                bullets_to_remove.push(i); // Remove bullet if it goes out of screen
             }
         }
     }
 
-    // Modification Phase: Remove marked bullets and enemies
-    for &i in bullets_to_remove.iter() {
-        bullets[i] = None;
+    // Remove bullets that went off-screen or collided
+    for &bullet_index in bullets_to_remove.iter().rev() {
+        bullets[bullet_index] = None;
     }
+
+    // Remove hit enemies
     for (i, j) in enemies_to_remove.iter() {
         enemies[*i][*j] = None;
     }
@@ -482,13 +504,11 @@ fn bullet_movement() {
     }
 
     // Redraw remaining enemies
-    for enemy_opt in enemies.iter_mut() {
-        for enemy in enemy_opt.iter_mut() {
-            if let Some(enemy) = enemy {
-                enemy.erase(&mut writer, (0, 0, 0));
+    for enemy_row in enemies.iter_mut() {
+        for enemy_opt in enemy_row {
+            if let Some(enemy) = enemy_opt {
                 enemy.draw(&mut writer);
             }
         }
     }
 }
-
