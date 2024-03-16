@@ -70,6 +70,7 @@ use spin::Mutex;
 // row number
 const ROWS: usize = 4;
 lazy_static! {
+    static ref SCORE: Mutex<u32> = Mutex::new(0);
     // tick counter from one to five
     static ref TICK_COUNTER1: Mutex<u32> = Mutex::new(0);
     static ref TICK_COUNTER2: Mutex<u32> = Mutex::new(0);
@@ -142,6 +143,7 @@ fn start() {
 
 
 fn tick() {
+    display_score();
     // Increment the tick counter
     let mut tick_counter1 = TICK_COUNTER1.lock();
     *tick_counter1 += 1;
@@ -469,6 +471,7 @@ fn bullet_movement() {
                     for (k, enemy) in enemy_opt.iter_mut().enumerate() {
                         if let Some(enemy) = enemy {
                             if check_collision(bullet, enemy) {
+                                enemy_killed();
                                 enemies_to_remove.push((j, k));
                                 hit = true;
                                 enemy.erase(&mut writer, (0, 0, 0));
@@ -511,4 +514,27 @@ fn bullet_movement() {
             }
         }
     }
+}
+
+fn display_score() {
+    let mut writer = screenwriter();
+
+    // Set the cursor position for score display at the top left
+    let score_display_x = 10; // A small margin from the left edge
+    let score_display_y = 10; // A small margin from the top edge
+
+    // Clear the score display area if needed, or draw over it directly
+
+    // Set the cursor position
+    writer.set_position(score_display_x, score_display_y);
+
+    // Get and display the current score
+    let score = SCORE.lock();
+    let _ = write!(writer, "Score: {}", *score);
+}
+
+fn enemy_killed() {
+    // Increment the score by 10 for each enemy killed
+    let mut score = SCORE.lock();
+    *score += 10;
 }

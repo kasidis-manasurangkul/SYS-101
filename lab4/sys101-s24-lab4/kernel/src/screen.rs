@@ -53,6 +53,12 @@ impl ScreenWriter {
         logger
     }
 
+        /// Sets the position of the cursor.
+    pub fn set_position(&mut self, x: usize, y: usize) {
+        self.x_pos = x;
+        self.y_pos = y;
+    }
+
     fn newline(&mut self) {
         self.y_pos += Size16 as usize + LINE_SPACING;
         self.carriage_return()
