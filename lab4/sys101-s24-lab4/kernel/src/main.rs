@@ -195,7 +195,8 @@ fn key(key: DecodedKey) {
                             player.y - 5,
                             5,
                             5,
-                            (0, 0xff, 0),
+                            //light blue
+                            (0xad, 0xd8, 0xe6),
                         ));
                     }
                 }
