@@ -74,7 +74,7 @@ lazy_static! {
     // tick counter from one to five
     static ref TICK_COUNTER1: Mutex<u32> = Mutex::new(0);
     static ref TICK_COUNTER2: Mutex<u32> = Mutex::new(0);
-    
+
     static ref PLAYER: Mutex<Player> = Mutex::new(Player::new(50, 50, 40, 40, (0xff, 0, 0)));
     static ref ENEMIES: Mutex<RefCell<[[Option<Enemy>; 15];ROWS]>> = Mutex::new(RefCell::new(init_enemy_array()));
     // enemy movement direction (1 for right, -1 for left)
@@ -110,10 +110,10 @@ fn start() {
 
     let mut enemies_guard = ENEMIES.lock();
     let mut enemies = enemies_guard.borrow_mut();
-    
+
     // Enemy and spacing dimensions
-    let enemy_width = 40;
-    let enemy_height = 40;
+    let enemy_width = 35;
+    let enemy_height = 35;
     let horizontal_spacing = 10;
     let vertical_spacing = 10;
     let enemy_color = (0, 0, 0xff);
@@ -141,7 +141,6 @@ fn start() {
     // Rest of the function...
 }
 
-
 fn tick() {
     display_score();
     // Increment the tick counter
@@ -149,7 +148,7 @@ fn tick() {
     *tick_counter1 += 1;
     if *tick_counter1 > 40 {
         enemy_movement();
-        
+
         *tick_counter1 = 0;
     } else {
         *tick_counter1 += 1;
@@ -162,7 +161,6 @@ fn tick() {
     } else {
         *tick_counter2 += 1;
     }
-    
 }
 
 fn key(key: DecodedKey) {
@@ -206,6 +204,96 @@ fn key(key: DecodedKey) {
     }
 }
 
+const ENEMY_PATTERN: [(f64, f64); 38] = [
+    (2.0, 0.0),
+    (8.0, 0.0),
+    (3.0, 1.0),
+    (7.0, 1.0),
+    (2.0, 2.0),
+    (3.0, 2.0),
+    (4.0, 2.0),
+    (5.0, 2.0),
+    (6.0, 2.0),
+    (7.0, 2.0),
+    (8.0, 2.0),
+    (1.0, 3.0),
+    (2.0, 3.0),
+    (4.0, 3.0),
+    (5.0, 3.0),
+    (6.0, 3.0),
+    (8.0, 3.0),
+    (9.0, 3.0),
+    (0.0, 4.0),
+    (1.0, 4.0),
+    (2.0, 4.0),
+    (3.0, 4.0),
+    (4.0, 4.0),
+    (5.0, 4.0),
+    (6.0, 4.0),
+    (7.0, 4.0),
+    (8.0, 4.0),
+    (9.0, 4.0),
+    (10.0, 4.0),
+    (1.0, 5.0),
+    (2.0, 5.0),
+    (3.0, 5.0),
+    (4.0, 5.0),
+    (5.0, 5.0),
+    (6.0, 5.0),
+    (7.0, 5.0),
+    (8.0, 5.0),
+    (9.0, 5.0),
+];
+
+const PLAYER_PATTERN: [(f64, f64); 14] = [
+    (1.0, 0.0),
+    (2.0, 0.0),
+    (3.0, 0.0),
+    (4.0, 0.0),
+    (0.0, 1.0),
+    (1.0, 1.0),
+    (2.0, 1.0),
+    (3.0, 1.0),
+    (4.0, 1.0),
+    (5.0, 1.0),
+    (0.0, 2.0),
+    (1.0, 2.0),
+    (4.0, 2.0),
+    (5.0, 2.0),
+];
+
+fn round_f64_to_usize(value: f64) -> usize {
+    let int_part = value as isize; // Get the integer part
+    let frac_part = value - int_part as f64; // Subtract to get the fractional part
+    if frac_part >= 0.5 {
+        (int_part + 1) as usize
+    } else {
+        int_part as usize
+    }
+}
+fn draw_scaled_pattern(
+    writer: &mut ScreenWriter,
+    pattern: &[(f64, f64)],
+    top_left_x: usize,
+    top_left_y: usize,
+    scale_factor: f64, // Changed to f64
+    r: u8,
+    g: u8,
+    b: u8,
+) {
+    for &(offset_x, offset_y) in pattern.iter() {
+        for dx in 0..(scale_factor as usize) {
+            // Cast to usize for loop range
+            for dy in 0..(scale_factor as usize) {
+                // Cast to usize for loop range
+                let x = top_left_x + round_f64_to_usize(offset_x * scale_factor) + dx;
+                let y = top_left_y + round_f64_to_usize(offset_y * scale_factor) + dy;
+                writer.draw_pixel(x, y, r, g, b);
+            }
+        }
+    }
+}
+
 pub struct Player {
     pub x: usize,
     pub y: usize,
@@ -226,17 +314,16 @@ impl Player {
     }
 
     pub fn draw(&self, writer: &mut ScreenWriter) {
-        for dx in 0..self.width {
-            for dy in 0..self.height {
-                writer.draw_pixel(
-                    self.x + dx,
-                    self.y + dy,
-                    self.color.0,
-                    self.color.1,
-                    self.color.2,
-                );
-            }
-        }
+        draw_scaled_pattern(
+            writer,
+            &PLAYER_PATTERN,
+            self.x,
+            self.y,
+            6.5,
+            self.color.0,
+            self.color.1,
+            self.color.2,
+        );
     }
 
     pub fn erase(&self, writer: &mut ScreenWriter, background_color: (u8, u8, u8)) {
@@ -269,7 +356,7 @@ fn init_enemy_array() -> [[Option<Enemy>; 15]; ROWS] {
 }
 
 impl Enemy {
-        pub fn new(x: usize, y: usize, width: usize, height: usize, color: (u8, u8, u8)) -> Self {
+    pub fn new(x: usize, y: usize, width: usize, height: usize, color: (u8, u8, u8)) -> Self {
         Enemy {
             x,
             y,
@@ -280,17 +367,16 @@ impl Enemy {
     }
 
     pub fn draw(&self, writer: &mut ScreenWriter) {
-        for dx in 0..self.width {
-            for dy in 0..self.height {
-                writer.draw_pixel(
-                    self.x + dx,
-                    self.y + dy,
-                    self.color.0,
-                    self.color.1,
-                    self.color.2,
-                );
-            }
-        }
+        draw_scaled_pattern(
+            writer,
+            &ENEMY_PATTERN,
+            self.x,
+            self.y,
+            3.0,
+            self.color.0,
+            self.color.1,
+            self.color.2,
+        );
     }
     pub fn erase(&self, writer: &mut ScreenWriter, background_color: (u8, u8, u8)) {
         for dx in 0..self.width {
@@ -378,9 +464,10 @@ fn enemy_movement() {
     let (first_x, last_x) = find_foremost_enemies_positions(&*enemies);
 
     // Determine if direction change is needed
-    if first_x < 20 && *enemy_dx == -1 {
+    if first_x < 30 && *enemy_dx == -1 {
         *enemy_dx = 1; // Change to moving right
-    } else if last_x + 40 > frame_info.width - 20 && *enemy_dx == 1 { // assuming enemy width is 40
+    } else if last_x + 30 > frame_info.width - 30 && *enemy_dx == 1 {
+        // assuming enemy width is 40
         *enemy_dx = -1; // Change to moving left
     }
 
@@ -404,15 +491,18 @@ fn find_foremost_enemies_positions(enemies: &[[Option<Enemy>; 15]]) -> (usize, u
         if let Some(first_enemy) = row.iter().find(|e| e.is_some()).and_then(|e| e.as_ref()) {
             first_x = first_x.min(first_enemy.x);
         }
-        if let Some(last_enemy) = row.iter().rev().find(|e| e.is_some()).and_then(|e| e.as_ref()) {
+        if let Some(last_enemy) = row
+            .iter()
+            .rev()
+            .find(|e| e.is_some())
+            .and_then(|e| e.as_ref())
+        {
             last_x = last_x.max(last_enemy.x);
         }
     }
 
     (first_x, last_x)
 }
-
-
 
 fn player_move_left(player: &mut Player) {
     let mut writer = screenwriter();
@@ -429,10 +519,10 @@ fn player_move_right(player: &mut Player) {
     // get screen size
     let frame_info = screenwriter().info;
     player.erase(&mut writer, (0, 0, 0));
-    if player.x + player.width < frame_info.width - 10{
+    if player.x + player.width < frame_info.width - 10 {
         player.x += 10;
     } else {
-        player.x = frame_info.width -10 - player.width; // Prevent overflow by setting to maximum value
+        player.x = frame_info.width - 10 - player.width; // Prevent overflow by setting to maximum value
     }
     player.draw(&mut writer);
 }
@@ -443,7 +533,10 @@ fn check_collision(bullet: &Bullet, enemy: &Enemy) -> bool {
     let enemy_right = enemy.x + enemy.width;
     let enemy_bottom = enemy.y + enemy.height;
 
-    !(bullet.x > enemy_right || bullet_right < enemy.x || bullet.y > enemy_bottom || bullet_bottom < enemy.y)
+    !(bullet.x > enemy_right
+        || bullet_right < enemy.x
+        || bullet.y > enemy_bottom
+        || bullet_bottom < enemy.y)
 }
 
 fn bullet_movement() {
@@ -462,9 +555,9 @@ fn bullet_movement() {
 
             // Check if bullet goes out of screen or collides
             if bullet.y <= 30 {
-                bullets_to_remove.push(i);  // Bullet goes out of screen
+                bullets_to_remove.push(i); // Bullet goes out of screen
             } else {
-                bullet.y -= 30;  // Move bullet
+                bullet.y -= 30; // Move bullet
                 let mut hit = false;
 
                 for (j, enemy_opt) in enemies.iter_mut().enumerate() {
