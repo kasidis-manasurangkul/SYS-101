@@ -69,6 +69,9 @@ use lazy_static::lazy_static;
 use spin::Mutex;
 // row number
 const ROWS: usize = 4;
+
+const BARRIER_COLS: usize = 20;
+const BARRIER_ROWS: usize = 5;
 lazy_static! {
     static ref SCORE: Mutex<u32> = Mutex::new(0);
     static ref GAMEOVER: Mutex<bool> = Mutex::new(false);
@@ -86,6 +89,8 @@ lazy_static! {
     static ref ENEMY_BULLETS: Mutex<RefCell<[Option<EnemyBullet>; 10]>> = Mutex::new(RefCell::new(init_enemy_bullet_array()));
     // array of bullets
     static ref BULLETS: Mutex<RefCell<[Option<Bullet>; 10]>> = Mutex::new(RefCell::new(init_bullet_array()));
+    // array of barriers
+    static ref BARRIERS: Mutex<RefCell<[[Option<Barrier>; BARRIER_COLS]; BARRIER_ROWS]>> = Mutex::new(RefCell::new(init_barrier_array()));
 }
 
 pub unsafe fn active_level_4_table(physical_memory_offset: VirtAddr) -> &'static mut PageTable {
@@ -140,6 +145,35 @@ fn start() {
                 enemy_color,
             ));
             enemies[i][j].as_ref().unwrap().draw(&mut writer);
+        }
+    }
+
+    // Barrier dimensions
+    let barrier_width = 20;
+    let barrier_height = 20;
+    let barrier_color = (0, 0xff, 0);
+    let barrier_spacing = 20; // Updated spacing between barriers
+
+    // Calculate the total width required for barriers including new spacing
+    let total_barriers_width = (barrier_width + barrier_spacing) * BARRIER_COLS - barrier_spacing;
+    let start_x = (frame_info.width - total_barriers_width) / 2;
+
+    let mut barriers_guard = BARRIERS.lock();
+    let mut barriers = barriers_guard.borrow_mut();
+
+    // Draw barriers with new spacing
+    for i in 0..BARRIER_ROWS {
+        for j in 0..BARRIER_COLS {
+            let barrier_x = start_x + j * (barrier_width + barrier_spacing);
+            let barrier_y = frame_info.height - 100 - 50 - i * (barrier_height + barrier_spacing);
+            barriers[i][j] = Some(Barrier::new(
+                barrier_x,
+                barrier_y,
+                barrier_width,
+                barrier_height,
+                barrier_color,
+            ));
+            barriers[i][j].as_ref().unwrap().draw(&mut writer);
         }
     }
 }
@@ -231,12 +265,12 @@ fn key(key: DecodedKey) {
                 }
             }
             if character == 'r' || character == 'R' {
-                    // Reset game if GAMEOVER is true
-                    let mut is_game_over = GAMEOVER.lock();
-                    if *is_game_over {
-                        reset();
-                    }
+                // Reset game if GAMEOVER is true
+                let mut is_game_over = GAMEOVER.lock();
+                if *is_game_over {
+                    reset();
                 }
+            }
         }
     }
 }
@@ -542,6 +576,66 @@ fn init_enemy_bullet_array() -> [Option<EnemyBullet>; 10] {
     enemy_bullets
 }
 
+#[derive(Copy, Clone)]
+struct Barrier {
+    x: usize,
+    y: usize,
+    width: usize,
+    height: usize,
+    color: (u8, u8, u8),
+}
+
+impl Barrier {
+    pub fn new(x: usize, y: usize, width: usize, height: usize, color: (u8, u8, u8)) -> Self {
+        Barrier {
+            x,
+            y,
+            width,
+            height,
+            color,
+        }
+    }
+
+    pub fn draw(&self, writer: &mut ScreenWriter) {
+        for dx in 0..self.width {
+            for dy in 0..self.height {
+                writer.draw_pixel(
+                    self.x + dx,
+                    self.y + dy,
+                    self.color.0,
+                    self.color.1,
+                    self.color.2,
+                );
+            }
+        }
+    }
+    pub fn erase(&self, writer: &mut ScreenWriter, background_color: (u8, u8, u8)) {
+        for dx in 0..self.width {
+            for dy in 0..self.height {
+                writer.draw_pixel(
+                    self.x + dx,
+                    self.y + dy,
+                    background_color.0,
+                    background_color.1,
+                    background_color.2,
+                );
+            }
+        }
+    }
+}
+
+fn init_barrier_array() -> [[Option<Barrier>; BARRIER_COLS]; BARRIER_ROWS] {
+    const ARRAY_REPEAT_VALUE: Option<Barrier> = None;
+    let mut barriers = [[ARRAY_REPEAT_VALUE; BARRIER_COLS]; BARRIER_ROWS];
+    // Alternatively, you can use a loop to initialize each element to None
+    for barrier_row in barriers.iter_mut() {
+        for barrier in barrier_row.iter_mut() {
+            *barrier = None;
+        }
+    }
+    barriers
+}
+
 fn enemy_shoot() {
     // Example: Random enemy shoots a bullet
     // This is a basic example, consider a more sophisticated approach
@@ -602,6 +696,21 @@ fn enemy_bullet_movement() {
                 *is_game_over = true;
             }
 
+            // Check for collision with barriers
+            let mut barriers_guard = BARRIERS.lock();
+            let barriers = barriers_guard.borrow();
+            for barrier_row in barriers.iter() {
+                for barrier_opt in barrier_row.iter() {
+                    if let Some(barrier) = barrier_opt {
+                        if check_collision_between_enemy_bullet_and_barrier(bullet, barrier){
+                            bullets_to_remove.push(i);
+                            barrier.erase(&mut writer, (0, 0, 0));
+                            break;
+                        }
+                    }
+                }
+            }
+
             // Check if bullet goes off-screen
             let frame_info = screenwriter().info;
             if bullet.y + bullet.height + 30 >= frame_info.height {
@@ -636,6 +745,21 @@ fn check_collision_with_player(bullet: &EnemyBullet, player: &Player) -> bool {
         || bullet_right < player.x
         || bullet.y > player_bottom
         || bullet_bottom < player.y)
+}
+
+fn check_collision_between_enemy_bullet_and_barrier(
+    bullet: &EnemyBullet,
+    barrier: &Barrier,
+) -> bool {
+    let bullet_right = bullet.x + bullet.width;
+    let bullet_bottom = bullet.y + bullet.height;
+    let barrier_right = barrier.x + barrier.width;
+    let barrier_bottom = barrier.y + barrier.height;
+
+    !(bullet.x > barrier_right
+        || bullet_right < barrier.x
+        || bullet.y > barrier_bottom
+        || bullet_bottom < barrier.y)
 }
 
 fn enemy_movement() {
@@ -740,6 +864,19 @@ fn check_collision(bullet: &Bullet, enemy: &Enemy) -> bool {
         || bullet_bottom < enemy.y)
 }
 
+// check collisioin between bullet and barrier
+fn check_collision_with_barrier(bullet: &Bullet, barrier: &Barrier) -> bool {
+    let bullet_right = bullet.x + bullet.width;
+    let bullet_bottom = bullet.y + bullet.height;
+    let barrier_right = barrier.x + barrier.width;
+    let barrier_bottom = barrier.y + barrier.height;
+
+    !(bullet.x > barrier_right
+        || bullet_right < barrier.x
+        || bullet.y > barrier_bottom
+        || bullet_bottom < barrier.y)
+}
+
 fn bullet_movement() {
     let mut writer = screenwriter();
     let mut bullets_guard = BULLETS.lock();
@@ -777,6 +914,21 @@ fn bullet_movement() {
                     if hit {
                         bullets_to_remove.push(i);
                         break;
+                    }
+                }
+
+                // Check if bullet collides with barrier
+                let mut barriers_guard = BARRIERS.lock();
+                let barriers = barriers_guard.borrow();
+                for barrier_row in barriers.iter() {
+                    for barrier_opt in barrier_row.iter() {
+                        if let Some(barrier) = barrier_opt {
+                            if check_collision_with_barrier(bullet, barrier) {
+                                bullets_to_remove.push(i);
+                                barrier.erase(&mut writer, (0, 0, 0));
+                                break;
+                            }
+                        }
                     }
                 }
             }
@@ -878,7 +1030,7 @@ fn are_enemies_remaining() -> bool {
     false // No enemies remaining
 }
 
-fn reset() {    
+fn reset() {
     // clear screen
     let mut writer = screenwriter();
     writer.clear();
@@ -895,7 +1047,6 @@ fn reset() {
     *game_over = false;
     let mut score = SCORE.lock();
     *score = 0;
-
 }
 
 fn initialize_player() {
