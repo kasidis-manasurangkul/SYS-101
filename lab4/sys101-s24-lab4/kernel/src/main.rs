@@ -69,6 +69,9 @@ use lazy_static::lazy_static;
 use spin::Mutex;
 // row number
 const ROWS: usize = 4;
+
+const BARRIER_COLS: usize = 20;
+const BARRIER_ROWS: usize = 4;
 lazy_static! {
     static ref SCORE: Mutex<u32> = Mutex::new(0);
     static ref GAMEOVER: Mutex<bool> = Mutex::new(false);
@@ -86,6 +89,8 @@ lazy_static! {
     static ref ENEMY_BULLETS: Mutex<RefCell<[Option<EnemyBullet>; 10]>> = Mutex::new(RefCell::new(init_enemy_bullet_array()));
     // array of bullets
     static ref BULLETS: Mutex<RefCell<[Option<Bullet>; 10]>> = Mutex::new(RefCell::new(init_bullet_array()));
+    // array of barriers
+    static ref BARRIERS: Mutex<RefCell<[[Option<Barrier>; BARRIER_COLS]; BARRIER_ROWS]>> = Mutex::new(RefCell::new(init_barrier_array()));
 }
 
 pub unsafe fn active_level_4_table(physical_memory_offset: VirtAddr) -> &'static mut PageTable {
@@ -96,149 +101,6 @@ pub unsafe fn active_level_4_table(physical_memory_offset: VirtAddr) -> &'static
     let page_table_ptr: *mut PageTable = virt.as_mut_ptr();
 
     &mut *page_table_ptr // unsafe
-}
-fn start() {
-    let frame_info = screenwriter().info;
-    let center_x = frame_info.width / 2;
-    let center_y = frame_info.height - 100;
-
-    // Define player size
-    let player_width = 40; // Width of the player
-    let player_height = 40; // Height of the player
-
-    // Create and draw the player
-    let mut player = PLAYER.lock();
-    player.x = center_x - player_width / 2;
-    player.y = center_y - player_height / 2;
-    player.draw(screenwriter());
-
-    let mut enemies_guard = ENEMIES.lock();
-    let mut enemies = enemies_guard.borrow_mut();
-
-    // Enemy and spacing dimensions
-    let enemy_width = 35;
-    let enemy_height = 35;
-    let horizontal_spacing = 10;
-    let vertical_spacing = 10;
-    let enemy_color = (0, 0, 0xff);
-
-    // Calculate the total width required for enemies including spacing
-    let total_enemies_width = (enemy_width + horizontal_spacing) * 15 - horizontal_spacing;
-    let start_x = (frame_info.width - total_enemies_width) / 2;
-
-    // Draw enemies with spacing
-    let mut writer = screenwriter();
-    for i in 0..ROWS {
-        for j in 0..15 {
-            let enemy_x = start_x + j * (enemy_width + horizontal_spacing);
-            let enemy_y = 50 + i * (enemy_height + vertical_spacing);
-            enemies[i][j] = Some(Enemy::new(
-                enemy_x,
-                enemy_y,
-                enemy_width,
-                enemy_height,
-                enemy_color,
-            ));
-            enemies[i][j].as_ref().unwrap().draw(&mut writer);
-        }
-    }
-}
-
-fn tick() {
-    if *GAMEOVER.lock() {
-        let mut tick_counter2 = TICK_COUNTER2.lock();
-        if *tick_counter2 > 5 {
-            display_game_over();
-            *tick_counter2 = 0;
-        } else {
-            *tick_counter2 += 1;
-        }
-        return;
-    }
-    if *WINNER.lock() {
-        let mut tick_counter2 = TICK_COUNTER2.lock();
-        if *tick_counter2 > 5 {
-            display_winner();
-            *tick_counter2 = 0;
-        } else {
-            *tick_counter2 += 1;
-        }
-        return;
-    }
-    display_score();
-    enemy_shoot();
-    // Increment the tick counter
-    let mut tick_counter1 = TICK_COUNTER1.lock();
-    *tick_counter1 += 1;
-    if *tick_counter1 > 40 {
-        if !are_enemies_remaining() {
-            display_winner();
-            return;
-        }
-        enemy_movement();
-
-        *tick_counter1 = 0;
-    } else {
-        *tick_counter1 += 1;
-    }
-    let mut tick_counter2 = TICK_COUNTER2.lock();
-    *tick_counter2 += 1;
-    if *tick_counter2 > 5 {
-        bullet_movement();
-        enemy_bullet_movement();
-        *tick_counter2 = 0;
-    } else {
-        *tick_counter2 += 1;
-    }
-}
-
-fn key(key: DecodedKey) {
-    // write!(screenwriter(), "{:?}", key).unwrap();
-    let mut player = PLAYER.lock();
-    // *player_moved = true;
-    let Writer = screenwriter();
-    match key {
-        DecodedKey::RawKey(code) => {
-            let frame_info = screenwriter().info;
-            match code {
-                pc_keyboard::KeyCode::ArrowLeft if player.x > 0 => {
-                    // write!(Writer, "left").unwrap();
-                    player_move_left(&mut player);
-                }
-                pc_keyboard::KeyCode::ArrowRight if player.x + player.width < frame_info.width => {
-                    player_move_right(&mut player);
-                }
-                _ => {}
-            }
-        }
-        DecodedKey::Unicode(character) => {
-            if character == ' ' {
-                // Handle space bar press
-                let mut bullets_guard = BULLETS.lock();
-                let mut bullets = bullets_guard.borrow_mut();
-                // Add a new bullet if under the limit
-                if bullets.iter().filter(|x| x.is_some()).count() < 10 {
-                    if let Some(first_empty_slot) = bullets.iter_mut().find(|x| x.is_none()) {
-                        *first_empty_slot = Some(Bullet::new(
-                            player.x + player.width / 2,
-                            player.y - 5,
-                            5,
-                            5,
-                            //light blue
-                            (0xad, 0xd8, 0xe6),
-                        ));
-                    }
-                }
-            }
-            if character == 'r' || character == 'R' {
-                    // Reset game if GAMEOVER is true
-                    let mut is_game_over = GAMEOVER.lock();
-                    if *is_game_over {
-                        reset();
-                    }
-                }
-        }
-    }
 }
 
 const ENEMY_PATTERN: [(f64, f64); 38] = [
@@ -331,6 +193,182 @@ fn draw_scaled_pattern(
     }
 }
 
+fn start() {
+    let frame_info = screenwriter().info;
+    let center_x = frame_info.width / 2;
+    let center_y = frame_info.height - 100;
+
+    // Define player size
+    let player_width = 40; // Width of the player
+    let player_height = 40; // Height of the player
+
+    // Create and draw the player
+    let mut player = PLAYER.lock();
+    player.x = center_x - player_width / 2;
+    player.y = center_y - player_height / 2;
+    player.draw(screenwriter());
+
+    let mut enemies_guard = ENEMIES.lock();
+    let mut enemies = enemies_guard.borrow_mut();
+
+    // Enemy and spacing dimensions
+    let enemy_width = 35;
+    let enemy_height = 35;
+    let horizontal_spacing = 10;
+    let vertical_spacing = 10;
+    let enemy_color = (0, 0, 0xff);
+
+    // Calculate the total width required for enemies including spacing
+    let total_enemies_width = (enemy_width + horizontal_spacing) * 15 - horizontal_spacing;
+    let start_x = (frame_info.width - total_enemies_width) / 2;
+
+    // Draw enemies with spacing
+    let mut writer = screenwriter();
+    for i in 0..ROWS {
+        for j in 0..15 {
+            let enemy_x = start_x + j * (enemy_width + horizontal_spacing);
+            let enemy_y = 50 + i * (enemy_height + vertical_spacing);
+            enemies[i][j] = Some(Enemy::new(
+                enemy_x,
+                enemy_y,
+                enemy_width,
+                enemy_height,
+                enemy_color,
+            ));
+            enemies[i][j].as_ref().unwrap().draw(&mut writer);
+        }
+    }
+
+    // Barrier dimensions
+    let barrier_width = 30;
+    let barrier_height = 20;
+    // grey
+    let barrier_color = (0x80, 0x80, 0x80);
+    let barrier_spacing = 20; // Updated spacing between barriers
+
+    // Calculate the total width required for barriers including new spacing
+    let total_barriers_width = (barrier_width + barrier_spacing) * BARRIER_COLS - barrier_spacing;
+    let start_x = (frame_info.width - total_barriers_width) / 2;
+
+    let mut barriers_guard = BARRIERS.lock();
+    let mut barriers = barriers_guard.borrow_mut();
+
+    // Draw barriers with new spacing
+    for i in 0..BARRIER_ROWS {
+        for j in 0..BARRIER_COLS {
+            let mut barrier_x = start_x + j * (barrier_width + barrier_spacing);
+            if i % 2 == 0{
+                barrier_x += 30;
+            }
+            else{
+                barrier_x -= 30;
+            }
+            let barrier_y_offset = 200; // Increase this value to raise the barriers higher
+            let barrier_y =
+                frame_info.height - barrier_y_offset - i * (barrier_height + barrier_spacing);
+
+            barriers[i][j] = Some(Barrier::new(
+                barrier_x,
+                barrier_y,
+                barrier_width,
+                barrier_height,
+                barrier_color,
+            ));
+            barriers[i][j].as_ref().unwrap().draw(&mut writer);
+        }
+    }
+}
+
+fn tick() {
+    if *GAMEOVER.lock() {
+        let mut tick_counter2 = TICK_COUNTER2.lock();
+        if *tick_counter2 > 5 {
+            display_game_over();
+            *tick_counter2 = 0;
+        } else {
+            *tick_counter2 += 1;
+        }
+        return;
+    }
+    if *WINNER.lock() {
+        let mut tick_counter2 = TICK_COUNTER2.lock();
+        if *tick_counter2 > 5 {
+            display_winner();
+            *tick_counter2 = 0;
+        } else {
+            *tick_counter2 += 1;
+        }
+        return;
+    }
+    display_score();
+    enemy_shoot();
+    // Increment the tick counter
+    let mut tick_counter1 = TICK_COUNTER1.lock();
+    *tick_counter1 += 1;
+    if *tick_counter1 > 40 {
+        if !are_enemies_remaining() {
+            display_winner();
+            return;
+        }
+        enemy_movement();
+
+        *tick_counter1 = 0;
+    } else {
+        *tick_counter1 += 1;
+    }
+    let mut tick_counter2 = TICK_COUNTER2.lock();
+    *tick_counter2 += 1;
+    if *tick_counter2 > 5 {
+        bullet_movement();
+        enemy_bullet_movement();
+        *tick_counter2 = 0;
+    } else {
+        *tick_counter2 += 1;
+    }
+}
+
+fn key(key: DecodedKey) {
+    // write!(screenwriter(), "{:?}", key).unwrap();
+    let mut player = PLAYER.lock();
+    // *player_moved = true;
+    let Writer = screenwriter();
+    match key {
+        DecodedKey::RawKey(code) => {
+            let frame_info = screenwriter().info;
+            match code {
+                pc_keyboard::KeyCode::ArrowLeft if player.x > 0 => {
+                    // write!(Writer, "left").unwrap();
+                    player_move_left(&mut player);
+                }
+                pc_keyboard::KeyCode::ArrowRight if player.x + player.width < frame_info.width => {
+                    player_move_right(&mut player);
+                }
+                _ => {}
+            }
+        }
+        DecodedKey::Unicode(character) => {
+            if character == ' ' {
+                // Handle space bar press
+                let mut bullets_guard = BULLETS.lock();
+                let mut bullets = bullets_guard.borrow_mut();
+                // Add a new bullet if under the limit
+                if bullets.iter().filter(|x| x.is_some()).count() < 10 {
+                    if let Some(first_empty_slot) = bullets.iter_mut().find(|x| x.is_none()) {
+                        *first_empty_slot = Some(Bullet::new(
+                            player.x + player.width / 2,
+                            player.y - 5,
+                            5,
+                            5,
+                            //light blue
+                            (0xad, 0xd8, 0xe6),
+                        ));
+                    }
+                }
+            }
+        }
+    }
+}
+
 pub struct Player {
     pub x: usize,
     pub y: usize,
@@ -378,21 +416,36 @@ impl Player {
     }
 }
 
+fn player_move_left(player: &mut Player) {
+    let mut writer = screenwriter();
+    player.erase(&mut writer, (0, 0, 0));
+    if player.x >= 10 {
+        player.x -= 10;
+    } else {
+        player.x = 0; // Prevent overflow by setting to minimum value
+    }
+    player.draw(&mut writer);
+}
+
+fn player_move_right(player: &mut Player) {
+    let mut writer = screenwriter();
+    // get screen size
+    let frame_info = screenwriter().info;
+    player.erase(&mut writer, (0, 0, 0));
+    if player.x + player.width < frame_info.width - 10 {
+        player.x += 10;
+    } else {
+        player.x = frame_info.width - 10 - player.width; // Prevent overflow by setting to maximum value
+    }
+    player.draw(&mut writer);
+}
+
 struct Bullet {
     x: usize,
     y: usize,
     width: usize,
     height: usize,
     color: (u8, u8, u8),
-}
-
-fn init_bullet_array() -> [Option<Bullet>; 10] {
-    let mut bullets = [None, None, None, None, None, None, None, None, None, None];
-    // Alternatively, you can use a loop to initialize each element to None
-    for bullet in bullets.iter_mut() {
-        *bullet = None;
-    }
-    bullets
 }
 
 impl Bullet {
@@ -429,6 +482,142 @@ impl Bullet {
                     background_color.1,
                     background_color.2,
                 );
+            }
+        }
+    }
+}
+
+fn init_bullet_array() -> [Option<Bullet>; 10] {
+    let mut bullets = [None, None, None, None, None, None, None, None, None, None];
+    // Alternatively, you can use a loop to initialize each element to None
+    for bullet in bullets.iter_mut() {
+        *bullet = None;
+    }
+    bullets
+}
+
+fn check_collision(bullet: &Bullet, enemy: &Enemy) -> bool {
+    let bullet_right = bullet.x + bullet.width;
+    let bullet_bottom = bullet.y + bullet.height;
+    let enemy_right = enemy.x + enemy.width;
+    let enemy_bottom = enemy.y + enemy.height;
+
+    !(bullet.x > enemy_right
+        || bullet_right < enemy.x
+        || bullet.y > enemy_bottom
+        || bullet_bottom < enemy.y)
+}
+
+// check collisioin between bullet and barrier
+fn check_collision_with_barrier(bullet: &Bullet, barrier: &Barrier) -> bool {
+    let bullet_right = bullet.x + bullet.width;
+    let bullet_bottom = bullet.y + bullet.height;
+    let barrier_right = barrier.x + barrier.width;
+    let barrier_bottom = barrier.y + barrier.height;
+
+    !(bullet.x > barrier_right
+        || bullet_right < barrier.x
+        || bullet.y > barrier_bottom
+        || bullet_bottom < barrier.y)
+}
+
+fn bullet_movement() {
+    let mut writer = screenwriter();
+    let mut bullets_guard = BULLETS.lock();
+    let mut bullets = bullets_guard.borrow_mut();
+    let mut enemies_guard = ENEMIES.lock();
+    let mut enemies = enemies_guard.borrow_mut();
+    let mut barriers_guard = BARRIERS.lock();
+    let mut barriers = barriers_guard.borrow_mut();
+
+    let mut bullets_to_remove = Vec::new();
+    let mut enemies_to_remove = Vec::new();
+    let mut barriers_to_remove = Vec::new();
+
+    for (i, bullet_opt) in bullets.iter_mut().enumerate() {
+        if let Some(bullet) = bullet_opt {
+            bullet.erase(&mut writer, (0, 0, 0));
+
+            // Check if bullet goes out of screen or collides
+            if bullet.y <= 30 {
+                bullets_to_remove.push(i); // Bullet goes out of screen
+            } else {
+                bullet.y -= 30; // Move bullet
+                let mut hit = false;
+
+                for (j, enemy_opt) in enemies.iter_mut().enumerate() {
+                    for (k, enemy) in enemy_opt.iter_mut().enumerate() {
+                        if let Some(enemy) = enemy {
+                            if check_collision(bullet, enemy) {
+                                enemy_killed();
+                                enemies_to_remove.push((j, k));
+                                hit = true;
+                                enemy.erase(&mut writer, (0, 0, 0));
+                                break;
+                            }
+                        }
+                    }
+
+                    if hit {
+                        bullets_to_remove.push(i);
+                        break;
+                    }
+                }
+
+                // Check if bullet collides with barrier
+                for (j, barrier_row) in barriers.iter_mut().enumerate() {
+                    for (k, barrier_opt) in barrier_row.iter_mut().enumerate() {
+                        if let Some(barrier) = barrier_opt {
+                            if check_collision_with_barrier(bullet, barrier) {
+                                barriers_to_remove.push((k, j));
+                                bullet.erase(&mut writer, (0, 0, 0));
+                                barrier.erase(&mut writer, (0, 0, 0));
+                                bullets_to_remove.push(i);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Remove bullets that went off-screen or collided
+    for &bullet_index in bullets_to_remove.iter().rev() {
+        bullets[bullet_index] = None;
+    }
+
+    // Remove hit enemies
+    for (i, j) in enemies_to_remove.iter() {
+        enemies[*i][*j] = None;
+    }
+
+    // Remove hit barriers
+    for (i, j) in barriers_to_remove.iter() {
+        barriers[*j][*i] = None;
+    }
+
+    // Redraw remaining bullets
+    for bullet_opt in bullets.iter() {
+        if let Some(bullet) = bullet_opt {
+            bullet.draw(&mut writer);
+        }
+    }
+
+    // Redraw remaining enemies
+    for enemy_row in enemies.iter_mut() {
+        for enemy_opt in enemy_row {
+            if let Some(enemy) = enemy_opt {
+                enemy.draw(&mut writer);
+            }
+        }
+    }
+
+    // Redraw remaining barriers
+    for barrier_row in barriers.iter_mut() {
+        for barrier_opt in barrier_row {
+            if let Some(barrier) = barrier_opt {
+                barrier.draw(&mut writer);
             }
         }
     }
@@ -481,6 +670,52 @@ impl Enemy {
                     background_color.1,
                     background_color.2,
                 );
+            }
+        }
+    }
+}
+
+fn enemy_movement() {
+    let mut enemies_guard = ENEMIES.lock();
+    let mut enemies = enemies_guard.borrow_mut();
+    let mut enemy_dx = ENEMY_DX.lock();
+    let frame_info = screenwriter().info;
+
+    // Find the positions of the foremost enemies
+    let (first_x, last_x) = find_foremost_enemies_positions(&*enemies);
+
+    // Determine if direction change is needed
+    if first_x < 30 && *enemy_dx == -1 || last_x + 30 > frame_info.width - 30 && *enemy_dx == 1 {
+        *enemy_dx *= -1; // Change direction
+        move_enemies_down(&mut enemies, 100); // Move all enemies down by 50 pixels
+    } else {
+        // Continue moving enemies in the current horizontal direction
+        let mut writer = screenwriter();
+        for enemy_opt in enemies.iter_mut() {
+            for enemy in enemy_opt.iter_mut() {
+                if let Some(enemy) = enemy {
+                    enemy.erase(&mut writer, (0, 0, 0));
+                    enemy.x = (enemy.x as i32 + *enemy_dx * 15) as usize; // Move the enemy
+                    enemy.draw(&mut writer);
+                }
+            }
+        }
+    }
+}
+
+fn move_enemies_down(enemies: &mut [[Option<Enemy>; 15]; ROWS], down_step: usize) {
+    let mut writer = screenwriter();
+    for enemy_opt in enemies.iter_mut() {
+        for enemy in enemy_opt.iter_mut() {
+            if let Some(enemy) = enemy {
+                enemy.erase(&mut writer, (0, 0, 0));
+                enemy.y += down_step; // Move the enemy down
+                let frame_info = screenwriter().info;
+                if enemy.y > frame_info.height - 100 - 50 {
+                    let mut is_game_over = GAMEOVER.lock();
+                    *is_game_over = true;
+                }
+                enemy.draw(&mut writer);
             }
         }
     }
@@ -542,6 +777,7 @@ fn init_enemy_bullet_array() -> [Option<EnemyBullet>; 10] {
     enemy_bullets
 }
 
+
 fn enemy_shoot() {
     // Example: Random enemy shoots a bullet
     // This is a basic example, consider a more sophisticated approach
@@ -586,8 +822,11 @@ fn enemy_bullet_movement() {
     let mut writer = screenwriter();
     let mut enemy_bullets_guard = ENEMY_BULLETS.lock();
     let mut enemy_bullets = enemy_bullets_guard.borrow_mut();
+    let mut barriers_guard = BARRIERS.lock();
+    let mut barriers = barriers_guard.borrow_mut();
 
     let mut bullets_to_remove = Vec::new();
+    let mut barriers_to_remove = Vec::new();
     let mut game_over = false;
 
     let player = PLAYER.lock();
@@ -595,11 +834,26 @@ fn enemy_bullet_movement() {
     for (i, bullet_opt) in enemy_bullets.iter_mut().enumerate() {
         if let Some(bullet) = bullet_opt {
             bullet.erase(&mut writer, (0, 0, 0));
-
+            let mut hit = false;
             // Check for collision with player
             if check_collision_with_player(&bullet, &player) {
                 let mut is_game_over = GAMEOVER.lock();
                 *is_game_over = true;
+            }
+
+            // Check if bullet collides with barrier
+            for (j, barrier_row) in barriers.iter().enumerate() {
+                for (k, barrier_opt) in barrier_row.iter().enumerate() {
+                    if let Some(barrier) = barrier_opt {
+                        if check_collision_between_enemy_bullet_and_barrier(bullet, barrier) {
+                            hit = true;
+                            barriers_to_remove.push((k, j));
+                            bullets_to_remove.push(i);
+                            barrier.erase(&mut writer, (0, 0, 0));
+                            break;
+                        }
+                    }
+                }
             }
 
             // Check if bullet goes off-screen
@@ -607,10 +861,14 @@ fn enemy_bullet_movement() {
             if bullet.y + bullet.height + 30 >= frame_info.height {
                 bullets_to_remove.push(i); // Bullet goes off the bottom of the screen
             } else {
-                bullet.y += 30; // Move bullet downwards
+                if !hit {
+                    bullet.y += 30; // Move bullet downwards
 
-                // Redraw the bullet at its new position
-                bullet.draw(&mut writer);
+                    // Redraw the bullet at its new position
+                    bullet.draw(&mut writer);
+                } else {
+                    bullet.erase(&mut writer, (0, 0, 0));
+                }
             }
         }
     }
@@ -620,9 +878,25 @@ fn enemy_bullet_movement() {
         enemy_bullets[bullet_index] = None;
     }
 
-    if game_over {
-        // Handle game over logic here
-        // For example, display a game over message and stop the game loop
+    // Remove hit barriers
+    for (i, j) in barriers_to_remove.iter() {
+        barriers[*j][*i] = None;
+    }
+
+    // Redraw remaining bullets
+    for bullet_opt in enemy_bullets.iter() {
+        if let Some(bullet) = bullet_opt {
+            bullet.draw(&mut writer);
+        }
+    }
+
+    // Redraw remaining barriers
+    for barrier_row in barriers.iter_mut() {
+        for barrier_opt in barrier_row.iter_mut() {
+            if let Some(barrier) = barrier_opt {
+                barrier.draw(&mut writer);
+            }
+        }
     }
 }
 
@@ -638,51 +912,21 @@ fn check_collision_with_player(bullet: &EnemyBullet, player: &Player) -> bool {
         || bullet_bottom < player.y)
 }
 
-fn enemy_movement() {
-    let mut enemies_guard = ENEMIES.lock();
-    let mut enemies = enemies_guard.borrow_mut();
-    let mut enemy_dx = ENEMY_DX.lock();
-    let frame_info = screenwriter().info;
+fn check_collision_between_enemy_bullet_and_barrier(
+    bullet: &EnemyBullet,
+    barrier: &Barrier,
+) -> bool {
+    let bullet_right = bullet.x + bullet.width;
+    let bullet_bottom = bullet.y + bullet.height;
+    let barrier_right = barrier.x + barrier.width;
+    let barrier_bottom = barrier.y + barrier.height;
 
-    // Find the positions of the foremost enemies
-    let (first_x, last_x) = find_foremost_enemies_positions(&*enemies);
-
-    // Determine if direction change is needed
-    if first_x < 30 && *enemy_dx == -1 || last_x + 30 > frame_info.width - 30 && *enemy_dx == 1 {
-        *enemy_dx *= -1; // Change direction
-        move_enemies_down(&mut enemies, 100); // Move all enemies down by 50 pixels
-    } else {
-        // Continue moving enemies in the current horizontal direction
-        let mut writer = screenwriter();
-        for enemy_opt in enemies.iter_mut() {
-            for enemy in enemy_opt.iter_mut() {
-                if let Some(enemy) = enemy {
-                    enemy.erase(&mut writer, (0, 0, 0));
-                    enemy.x = (enemy.x as i32 + *enemy_dx * 15) as usize; // Move the enemy
-                    enemy.draw(&mut writer);
-                }
-            }
-        }
-    }
+    !(bullet.x > barrier_right
+        || bullet_right < barrier.x
+        || bullet.y > barrier_bottom
+        || bullet_bottom < barrier.y)
 }
 
-fn move_enemies_down(enemies: &mut [[Option<Enemy>; 15]; ROWS], down_step: usize) {
-    let mut writer = screenwriter();
-    for enemy_opt in enemies.iter_mut() {
-        for enemy in enemy_opt.iter_mut() {
-            if let Some(enemy) = enemy {
-                enemy.erase(&mut writer, (0, 0, 0));
-                enemy.y += down_step; // Move the enemy down
-                let frame_info = screenwriter().info;
-                if enemy.y > frame_info.height - 100 - 50 {
-                    let mut is_game_over = GAMEOVER.lock();
-                    *is_game_over = true;
-                }
-                enemy.draw(&mut writer);
-            }
-        }
-    }
-}
 
 fn find_foremost_enemies_positions(enemies: &[[Option<Enemy>; 15]]) -> (usize, usize) {
     let mut first_x = usize::MAX;
@@ -705,109 +949,65 @@ fn find_foremost_enemies_positions(enemies: &[[Option<Enemy>; 15]]) -> (usize, u
     (first_x, last_x)
 }
 
-fn player_move_left(player: &mut Player) {
-    let mut writer = screenwriter();
-    player.erase(&mut writer, (0, 0, 0));
-    if player.x >= 10 {
-        player.x -= 10;
-    } else {
-        player.x = 0; // Prevent overflow by setting to minimum value
+
+#[derive(Copy, Clone)]
+struct Barrier {
+    x: usize,
+    y: usize,
+    width: usize,
+    height: usize,
+    color: (u8, u8, u8),
+}
+
+impl Barrier {
+    pub fn new(x: usize, y: usize, width: usize, height: usize, color: (u8, u8, u8)) -> Self {
+        Barrier {
+            x,
+            y,
+            width,
+            height,
+            color,
+        }
     }
-    player.draw(&mut writer);
-}
-fn player_move_right(player: &mut Player) {
-    let mut writer = screenwriter();
-    // get screen size
-    let frame_info = screenwriter().info;
-    player.erase(&mut writer, (0, 0, 0));
-    if player.x + player.width < frame_info.width - 10 {
-        player.x += 10;
-    } else {
-        player.x = frame_info.width - 10 - player.width; // Prevent overflow by setting to maximum value
-    }
-    player.draw(&mut writer);
-}
 
-fn check_collision(bullet: &Bullet, enemy: &Enemy) -> bool {
-    let bullet_right = bullet.x + bullet.width;
-    let bullet_bottom = bullet.y + bullet.height;
-    let enemy_right = enemy.x + enemy.width;
-    let enemy_bottom = enemy.y + enemy.height;
-
-    !(bullet.x > enemy_right
-        || bullet_right < enemy.x
-        || bullet.y > enemy_bottom
-        || bullet_bottom < enemy.y)
-}
-
-fn bullet_movement() {
-    let mut writer = screenwriter();
-    let mut bullets_guard = BULLETS.lock();
-    let mut bullets = bullets_guard.borrow_mut();
-    let mut enemies_guard = ENEMIES.lock();
-    let mut enemies = enemies_guard.borrow_mut();
-
-    let mut bullets_to_remove = Vec::new();
-    let mut enemies_to_remove = Vec::new();
-
-    for (i, bullet_opt) in bullets.iter_mut().enumerate() {
-        if let Some(bullet) = bullet_opt {
-            bullet.erase(&mut writer, (0, 0, 0));
-
-            // Check if bullet goes out of screen or collides
-            if bullet.y <= 30 {
-                bullets_to_remove.push(i); // Bullet goes out of screen
-            } else {
-                bullet.y -= 30; // Move bullet
-                let mut hit = false;
-
-                for (j, enemy_opt) in enemies.iter_mut().enumerate() {
-                    for (k, enemy) in enemy_opt.iter_mut().enumerate() {
-                        if let Some(enemy) = enemy {
-                            if check_collision(bullet, enemy) {
-                                enemy_killed();
-                                enemies_to_remove.push((j, k));
-                                hit = true;
-                                enemy.erase(&mut writer, (0, 0, 0));
-                                break;
-                            }
-                        }
-                    }
-
-                    if hit {
-                        bullets_to_remove.push(i);
-                        break;
-                    }
-                }
+    pub fn draw(&self, writer: &mut ScreenWriter) {
+        for dx in 0..self.width {
+            for dy in 0..self.height {
+                writer.draw_pixel(
+                    self.x + dx,
+                    self.y + dy,
+                    self.color.0,
+                    self.color.1,
+                    self.color.2,
+                );
             }
         }
     }
-
-    // Remove bullets that went off-screen or collided
-    for &bullet_index in bullets_to_remove.iter().rev() {
-        bullets[bullet_index] = None;
-    }
-
-    // Remove hit enemies
-    for (i, j) in enemies_to_remove.iter() {
-        enemies[*i][*j] = None;
-    }
-
-    // Redraw remaining bullets
-    for bullet_opt in bullets.iter() {
-        if let Some(bullet) = bullet_opt {
-            bullet.draw(&mut writer);
-        }
-    }
-
-    // Redraw remaining enemies
-    for enemy_row in enemies.iter_mut() {
-        for enemy_opt in enemy_row {
-            if let Some(enemy) = enemy_opt {
-                enemy.draw(&mut writer);
+    pub fn erase(&self, writer: &mut ScreenWriter, background_color: (u8, u8, u8)) {
+        for dx in 0..self.width {
+            for dy in 0..self.height {
+                writer.draw_pixel(
+                    self.x + dx,
+                    self.y + dy,
+                    background_color.0,
+                    background_color.1,
+                    background_color.2,
+                );
             }
         }
     }
+}
+
+fn init_barrier_array() -> [[Option<Barrier>; BARRIER_COLS]; BARRIER_ROWS] {
+    const ARRAY_REPEAT_VALUE: Option<Barrier> = None;
+    let mut barriers = [[ARRAY_REPEAT_VALUE; BARRIER_COLS]; BARRIER_ROWS];
+    // Alternatively, you can use a loop to initialize each element to None
+    for barrier_row in barriers.iter_mut() {
+        for barrier in barrier_row.iter_mut() {
+            *barrier = None;
+        }
+    }
+    barriers
 }
 
 fn display_score() {
@@ -876,85 +1076,4 @@ fn are_enemies_remaining() -> bool {
     }
 
     false // No enemies remaining
-}
-
-fn reset() {    
-    // clear screen
-    let mut writer = screenwriter();
-    writer.clear();
-    clear_bullets();
-    initialize_player();
-    initialize_enemies();
-    let mut game_over = GAMEOVER.lock();
-    // reset tick counters
-    let mut tick_counter1 = TICK_COUNTER1.lock();
-    *tick_counter1 = 0;
-    let mut tick_counter2 = TICK_COUNTER2.lock();
-    *tick_counter2 = 0;
-
-    *game_over = false;
-    let mut score = SCORE.lock();
-    *score = 0;
-
-}
-
-fn initialize_player() {
-    let frame_info = screenwriter().info;
-    let center_x = frame_info.width / 2;
-    let center_y = frame_info.height - 100;
-
-    let player_width = 40; // Width of the player
-    let player_height = 40; // Height of the player
-
-    let mut player = PLAYER.lock();
-    player.x = center_x - player_width / 2;
-    player.y = center_y - player_height / 2;
-    player.draw(screenwriter());
-}
-
-fn initialize_enemies() {
-    let frame_info = screenwriter().info;
-    let enemy_width = 35;
-    let enemy_height = 35;
-    let horizontal_spacing = 10;
-    let vertical_spacing = 10;
-    let enemy_color = (0, 0, 0xff);
-
-    let total_enemies_width = (enemy_width + horizontal_spacing) * 15 - horizontal_spacing;
-    let start_x = (frame_info.width - total_enemies_width) / 2;
-
-    let mut enemies_guard = ENEMIES.lock();
-    let mut enemies = enemies_guard.borrow_mut();
-    let mut writer = screenwriter();
-
-    for i in 0..ROWS {
-        for j in 0..15 {
-            let enemy_x = start_x + j * (enemy_width + horizontal_spacing);
-            let enemy_y = 50 + i * (enemy_height + vertical_spacing);
-            enemies[i][j] = Some(Enemy::new(
-                enemy_x,
-                enemy_y,
-                enemy_width,
-                enemy_height,
-                enemy_color,
-            ));
-            enemies[i][j].as_ref().unwrap().draw(&mut writer);
-        }
-    }
-}
-
-fn clear_bullets() {
-    let mut bullets_guard = BULLETS.lock();
-    let mut bullets = bullets_guard.borrow_mut();
-
-    for bullet in bullets.iter_mut() {
-        *bullet = None;
-    }
-
-    let mut enemy_bullets_guard = ENEMY_BULLETS.lock();
-    let mut enemy_bullets = enemy_bullets_guard.borrow_mut();
-
-    for bullet in enemy_bullets.iter_mut() {
-        *bullet = None;
-    }
 }
