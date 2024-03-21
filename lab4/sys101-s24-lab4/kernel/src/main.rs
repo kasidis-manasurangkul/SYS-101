@@ -680,8 +680,11 @@ fn enemy_bullet_movement() {
     let mut writer = screenwriter();
     let mut enemy_bullets_guard = ENEMY_BULLETS.lock();
     let mut enemy_bullets = enemy_bullets_guard.borrow_mut();
+    let mut barriers_guard = BARRIERS.lock();
+    let mut barriers = barriers_guard.borrow_mut();
 
     let mut bullets_to_remove = Vec::new();
+    let mut barriers_to_remove = Vec::new();
     let mut game_over = false;
 
     let player = PLAYER.lock();
@@ -689,20 +692,21 @@ fn enemy_bullet_movement() {
     for (i, bullet_opt) in enemy_bullets.iter_mut().enumerate() {
         if let Some(bullet) = bullet_opt {
             bullet.erase(&mut writer, (0, 0, 0));
-
+            let mut hit = false;
             // Check for collision with player
             if check_collision_with_player(&bullet, &player) {
                 let mut is_game_over = GAMEOVER.lock();
                 *is_game_over = true;
             }
-
-            // Check for collision with barriers
-            let mut barriers_guard = BARRIERS.lock();
-            let barriers = barriers_guard.borrow();
-            for barrier_row in barriers.iter() {
-                for barrier_opt in barrier_row.iter() {
+            
+            // Check if bullet collides with barrier
+            for (j, barrier_row) in barriers.iter().enumerate() {
+                for (k, barrier_opt) in barrier_row.iter().enumerate() {
                     if let Some(barrier) = barrier_opt {
-                        if check_collision_between_enemy_bullet_and_barrier(bullet, barrier){
+                        if check_collision_between_enemy_bullet_and_barrier(bullet, barrier) {
+                            hit = true;
+                            barriers_to_remove.push((k, j));
+                            bullet.erase(&mut writer, (0, 0, 0));
                             bullets_to_remove.push(i);
                             barrier.erase(&mut writer, (0, 0, 0));
                             break;
@@ -716,10 +720,16 @@ fn enemy_bullet_movement() {
             if bullet.y + bullet.height + 30 >= frame_info.height {
                 bullets_to_remove.push(i); // Bullet goes off the bottom of the screen
             } else {
+                if !hit {
                 bullet.y += 30; // Move bullet downwards
 
                 // Redraw the bullet at its new position
                 bullet.draw(&mut writer);
+                }
+                else {
+                    bullets_to_remove.push(i);
+                    bullet.erase(&mut writer, (0, 0, 0));
+                }
             }
         }
     }
@@ -729,9 +739,25 @@ fn enemy_bullet_movement() {
         enemy_bullets[bullet_index] = None;
     }
 
-    if game_over {
-        // Handle game over logic here
-        // For example, display a game over message and stop the game loop
+    // Remove hit barriers
+    for (i, j) in barriers_to_remove.iter() {
+        barriers[*j][*i] = None;
+    }
+
+    // Redraw remaining bullets
+    for bullet_opt in enemy_bullets.iter() {
+        if let Some(bullet) = bullet_opt {
+            bullet.draw(&mut writer);
+        }
+    }
+
+    // Redraw remaining barriers
+    for barrier_row in barriers.iter_mut() {
+        for barrier_opt in barrier_row.iter_mut() {
+            if let Some(barrier) = barrier_opt {
+                barrier.draw(&mut writer);
+            }
+        }
     }
 }
 
@@ -883,9 +909,12 @@ fn bullet_movement() {
     let mut bullets = bullets_guard.borrow_mut();
     let mut enemies_guard = ENEMIES.lock();
     let mut enemies = enemies_guard.borrow_mut();
+    let mut barriers_guard = BARRIERS.lock();
+    let mut barriers = barriers_guard.borrow_mut();
 
     let mut bullets_to_remove = Vec::new();
     let mut enemies_to_remove = Vec::new();
+    let mut barriers_to_remove = Vec::new();
 
     for (i, bullet_opt) in bullets.iter_mut().enumerate() {
         if let Some(bullet) = bullet_opt {
@@ -918,14 +947,14 @@ fn bullet_movement() {
                 }
 
                 // Check if bullet collides with barrier
-                let mut barriers_guard = BARRIERS.lock();
-                let barriers = barriers_guard.borrow();
-                for barrier_row in barriers.iter() {
-                    for barrier_opt in barrier_row.iter() {
+                for (j, barrier_row) in barriers.iter_mut().enumerate() {
+                    for (k, barrier_opt) in barrier_row.iter_mut().enumerate() {
                         if let Some(barrier) = barrier_opt {
                             if check_collision_with_barrier(bullet, barrier) {
-                                bullets_to_remove.push(i);
+                                barriers_to_remove.push((k, j));
+                                bullet.erase(&mut writer, (0, 0, 0));
                                 barrier.erase(&mut writer, (0, 0, 0));
+                                bullets_to_remove.push(i);
                                 break;
                             }
                         }
@@ -945,6 +974,11 @@ fn bullet_movement() {
         enemies[*i][*j] = None;
     }
 
+    // Remove hit barriers
+    for (i, j) in barriers_to_remove.iter() {
+        barriers[*j][*i] = None;
+    }
+
     // Redraw remaining bullets
     for bullet_opt in bullets.iter() {
         if let Some(bullet) = bullet_opt {
@@ -957,6 +991,15 @@ fn bullet_movement() {
         for enemy_opt in enemy_row {
             if let Some(enemy) = enemy_opt {
                 enemy.draw(&mut writer);
+            }
+        }
+    }
+
+    // Redraw remaining barriers
+    for barrier_row in barriers.iter_mut() {
+        for barrier_opt in barrier_row {
+            if let Some(barrier) = barrier_opt {
+                barrier.draw(&mut writer);
             }
         }
     }
