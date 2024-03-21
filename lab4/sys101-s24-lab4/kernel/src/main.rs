@@ -71,7 +71,7 @@ use spin::Mutex;
 const ROWS: usize = 4;
 
 const BARRIER_COLS: usize = 20;
-const BARRIER_ROWS: usize = 5;
+const BARRIER_ROWS: usize = 4;
 lazy_static! {
     static ref SCORE: Mutex<u32> = Mutex::new(0);
     static ref GAMEOVER: Mutex<bool> = Mutex::new(false);
@@ -149,9 +149,10 @@ fn start() {
     }
 
     // Barrier dimensions
-    let barrier_width = 20;
+    let barrier_width = 30;
     let barrier_height = 20;
-    let barrier_color = (0, 0xff, 0);
+    // grey
+    let barrier_color = (0x80, 0x80, 0x80);
     let barrier_spacing = 20; // Updated spacing between barriers
 
     // Calculate the total width required for barriers including new spacing
@@ -164,8 +165,17 @@ fn start() {
     // Draw barriers with new spacing
     for i in 0..BARRIER_ROWS {
         for j in 0..BARRIER_COLS {
-            let barrier_x = start_x + j * (barrier_width + barrier_spacing);
-            let barrier_y = frame_info.height - 100 - 50 - i * (barrier_height + barrier_spacing);
+            let mut barrier_x = start_x + j * (barrier_width + barrier_spacing);
+            if i % 2 == 0{
+                barrier_x += 30;
+            }
+            else{
+                barrier_x -= 30;
+            }
+            let barrier_y_offset = 200; // Increase this value to raise the barriers higher
+            let barrier_y =
+                frame_info.height - barrier_y_offset - i * (barrier_height + barrier_spacing);
+
             barriers[i][j] = Some(Barrier::new(
                 barrier_x,
                 barrier_y,
@@ -698,7 +708,7 @@ fn enemy_bullet_movement() {
                 let mut is_game_over = GAMEOVER.lock();
                 *is_game_over = true;
             }
-            
+
             // Check if bullet collides with barrier
             for (j, barrier_row) in barriers.iter().enumerate() {
                 for (k, barrier_opt) in barrier_row.iter().enumerate() {
@@ -721,12 +731,11 @@ fn enemy_bullet_movement() {
                 bullets_to_remove.push(i); // Bullet goes off the bottom of the screen
             } else {
                 if !hit {
-                bullet.y += 30; // Move bullet downwards
+                    bullet.y += 30; // Move bullet downwards
 
-                // Redraw the bullet at its new position
-                bullet.draw(&mut writer);
-                }
-                else {
+                    // Redraw the bullet at its new position
+                    bullet.draw(&mut writer);
+                } else {
                     bullets_to_remove.push(i);
                     bullet.erase(&mut writer, (0, 0, 0));
                 }
