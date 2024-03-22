@@ -496,7 +496,7 @@ fn init_bullet_array() -> [Option<Bullet>; 10] {
     bullets
 }
 
-fn check_collision(bullet: &Bullet, enemy: &Enemy) -> bool {
+fn check_collision_between_player_bullet_and_enemy(bullet: &Bullet, enemy: &Enemy) -> bool {
     let bullet_right = bullet.x + bullet.width;
     let bullet_bottom = bullet.y + bullet.height;
     let enemy_right = enemy.x + enemy.width;
@@ -509,7 +509,7 @@ fn check_collision(bullet: &Bullet, enemy: &Enemy) -> bool {
 }
 
 // check collisioin between bullet and barrier
-fn check_collision_with_barrier(bullet: &Bullet, barrier: &Barrier) -> bool {
+fn check_collision_between_player_bullet_and_barrier(bullet: &Bullet, barrier: &Barrier) -> bool {
     let bullet_right = bullet.x + bullet.width;
     let bullet_bottom = bullet.y + bullet.height;
     let barrier_right = barrier.x + barrier.width;
@@ -548,7 +548,7 @@ fn bullet_movement() {
                 for (j, enemy_opt) in enemies.iter_mut().enumerate() {
                     for (k, enemy) in enemy_opt.iter_mut().enumerate() {
                         if let Some(enemy) = enemy {
-                            if check_collision(bullet, enemy) {
+                            if check_collision_between_player_bullet_and_enemy(bullet, enemy) {
                                 enemy_killed();
                                 enemies_to_remove.push((j, k));
                                 hit = true;
@@ -568,7 +568,7 @@ fn bullet_movement() {
                 for (j, barrier_row) in barriers.iter_mut().enumerate() {
                     for (k, barrier_opt) in barrier_row.iter_mut().enumerate() {
                         if let Some(barrier) = barrier_opt {
-                            if check_collision_with_barrier(bullet, barrier) {
+                            if check_collision_between_player_bullet_and_barrier(bullet, barrier) {
                                 barriers_to_remove.push((k, j));
                                 bullet.erase(&mut writer, (0, 0, 0));
                                 barrier.erase(&mut writer, (0, 0, 0));
@@ -836,7 +836,7 @@ fn enemy_bullet_movement() {
             bullet.erase(&mut writer, (0, 0, 0));
             let mut hit = false;
             // Check for collision with player
-            if check_collision_with_player(&bullet, &player) {
+            if check_collision_between_enemy_bullet_and_player(&bullet, &player) {
                 let mut is_game_over = GAMEOVER.lock();
                 *is_game_over = true;
             }
@@ -900,7 +900,7 @@ fn enemy_bullet_movement() {
     }
 }
 
-fn check_collision_with_player(bullet: &EnemyBullet, player: &Player) -> bool {
+fn check_collision_between_enemy_bullet_and_player(bullet: &EnemyBullet, player: &Player) -> bool {
     let bullet_right = bullet.x + bullet.width;
     let bullet_bottom = bullet.y + bullet.height;
     let player_right = player.x + player.width;
