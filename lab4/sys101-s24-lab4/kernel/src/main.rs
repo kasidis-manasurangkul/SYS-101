@@ -257,10 +257,9 @@ fn start() {
     for i in 0..BARRIER_ROWS {
         for j in 0..BARRIER_COLS {
             let mut barrier_x = start_x + j * (barrier_width + barrier_spacing);
-            if i % 2 == 0{
+            if i % 2 == 0 {
                 barrier_x += 30;
-            }
-            else{
+            } else {
                 barrier_x -= 30;
             }
             let barrier_y_offset = 200; // Increase this value to raise the barriers higher
@@ -328,7 +327,6 @@ fn tick() {
 }
 
 fn key(key: DecodedKey) {
-    // write!(screenwriter(), "{:?}", key).unwrap();
     let mut player = PLAYER.lock();
     // *player_moved = true;
     let Writer = screenwriter();
@@ -338,9 +336,25 @@ fn key(key: DecodedKey) {
             match code {
                 pc_keyboard::KeyCode::ArrowLeft if player.x > 0 => {
                     // write!(Writer, "left").unwrap();
+                    let mut game_over = GAMEOVER.lock();
+                    let mut winner = WINNER.lock();
+                    if (*game_over || *winner) {
+                        reset_game();
+                        *game_over = false;
+                        *winner = false;
+                        *SCORE.lock() = 0;
+                    }
                     player_move_left(&mut player);
                 }
                 pc_keyboard::KeyCode::ArrowRight if player.x + player.width < frame_info.width => {
+                    let mut game_over = GAMEOVER.lock();
+                    let mut winner = WINNER.lock();
+                    if (*game_over || *winner) {
+                        reset_game();
+                        *game_over = false;
+                        *winner = false;
+                        *SCORE.lock() = 0;
+                    }
                     player_move_right(&mut player);
                 }
                 _ => {}
@@ -363,13 +377,6 @@ fn key(key: DecodedKey) {
                             (0xad, 0xd8, 0xe6),
                         ));
                     }
-                }
-            }
-            if (character == 'r' || character == 'R') {
-                let mut game_over = GAMEOVER.lock();
-                let mut winner = WINNER.lock();
-                if (*game_over || *winner) {
-                    reset_game();
                 }
             }
         }
@@ -401,7 +408,7 @@ impl Player {
             &PLAYER_PATTERN,
             self.x,
             self.y,
-            6.5,
+            6.6,
             self.color.0,
             self.color.1,
             self.color.2,
@@ -784,7 +791,6 @@ fn init_enemy_bullet_array() -> [Option<EnemyBullet>; 10] {
     enemy_bullets
 }
 
-
 fn enemy_shoot() {
     // Example: Random enemy shoots a bullet
     // This is a basic example, consider a more sophisticated approach
@@ -934,7 +940,6 @@ fn check_collision_between_enemy_bullet_and_barrier(
         || bullet_bottom < barrier.y)
 }
 
-
 fn find_foremost_enemies_positions(enemies: &[[Option<Enemy>; 15]]) -> (usize, usize) {
     let mut first_x = usize::MAX;
     let mut last_x = 0;
@@ -955,7 +960,6 @@ fn find_foremost_enemies_positions(enemies: &[[Option<Enemy>; 15]]) -> (usize, u
 
     (first_x, last_x)
 }
-
 
 #[derive(Copy, Clone)]
 struct Barrier {
@@ -1054,8 +1058,8 @@ fn display_game_over() {
     let message_y = writer.info.height / 2;
     writer.set_position(message_x, message_y);
     let _ = write!(writer, "GAME OVER");
-    writer.set_position(message_x - 35, message_y + 20); // Adjust Y position for next line
-    let _ = write!(writer, "Press R to Restart");
+    writer.set_position(message_x - 80, message_y + 20); // Adjust Y position for next line
+    let _ = write!(writer, "Move left or right to retry");
 
     // // Display the Retry message
     // writer.set_position(message_x - 30, message_y + 20); // Adjust Y position for next line
@@ -1090,35 +1094,29 @@ fn are_enemies_remaining() -> bool {
             }
         }
     }
-
     false // No enemies remaining
 }
 
 fn reset_game() {
-    // Clear the screen
-    let mut writer = screenwriter();
-    writer.clear();
-    // let frame_info = writer.info;
-    // let center_x = frame_info.width / 2;
-    // let center_y = frame_info.height - 100;
-    // let player_width = 40;
-    // let player_height = 40;
-    // let player_color = (0xff, 0, 0);
-    // let mut player = PLAYER.lock();
-    // *player = Player::new(center_x - player_width / 2, center_y - player_height / 2, player_width, player_height, player_color);
-    // player.draw(&mut writer);
-
-    // restore enemies at the top center
+    let frame_info = screenwriter().info;
+    // restore enemies
     let mut enemies_guard = ENEMIES.lock();
     let mut enemies = enemies_guard.borrow_mut();
-    let frame_info = writer.info;
+
+    // Enemy and spacing dimensions
     let enemy_width = 35;
     let enemy_height = 35;
     let horizontal_spacing = 10;
     let vertical_spacing = 10;
     let enemy_color = (0, 0, 0xff);
+
+    // Calculate the total width required for enemies including spacing
     let total_enemies_width = (enemy_width + horizontal_spacing) * 15 - horizontal_spacing;
     let start_x = (frame_info.width - total_enemies_width) / 2;
+
+    // Draw enemies with spacing
+    let mut writer = screenwriter();
+    writer.clear(); // Clear the screen
     for i in 0..ROWS {
         for j in 0..15 {
             let enemy_x = start_x + j * (enemy_width + horizontal_spacing);
@@ -1134,15 +1132,21 @@ fn reset_game() {
         }
     }
 
-    // restore barriers
-    let mut barriers_guard = BARRIERS.lock();
-    let mut barriers = barriers_guard.borrow_mut();
+    // Barrier dimensions
     let barrier_width = 30;
     let barrier_height = 20;
+    // grey
     let barrier_color = (0x80, 0x80, 0x80);
-    let barrier_spacing = 20;
+    let barrier_spacing = 20; // Updated spacing between barriers
+
+    // Calculate the total width required for barriers including new spacing
     let total_barriers_width = (barrier_width + barrier_spacing) * BARRIER_COLS - barrier_spacing;
     let start_x = (frame_info.width - total_barriers_width) / 2;
+
+    let mut barriers_guard = BARRIERS.lock();
+    let mut barriers = barriers_guard.borrow_mut();
+
+    // Draw barriers with new spacing
     for i in 0..BARRIER_ROWS {
         for j in 0..BARRIER_COLS {
             let mut barrier_x = start_x + j * (barrier_width + barrier_spacing);
@@ -1151,8 +1155,10 @@ fn reset_game() {
             } else {
                 barrier_x -= 30;
             }
-            let barrier_y_offset = 200;
-            let barrier_y = frame_info.height - barrier_y_offset - i * (barrier_height + barrier_spacing);
+            let barrier_y_offset = 200; // Increase this value to raise the barriers higher
+            let barrier_y =
+                frame_info.height - barrier_y_offset - i * (barrier_height + barrier_spacing);
+
             barriers[i][j] = Some(Barrier::new(
                 barrier_x,
                 barrier_y,
@@ -1164,16 +1170,17 @@ fn reset_game() {
         }
     }
 
+    // remove bullets
+    let mut bullets_guard = BULLETS.lock();
+    let mut bullets = bullets_guard.borrow_mut();
+    for bullet in bullets.iter_mut() {
+        *bullet = None;
+    }
 
-    *SCORE.lock() = 0;
-    *TICK_COUNTER1.lock() = 0;
-    *TICK_COUNTER2.lock() = 0;
-    *ENEMY_DX.lock() = 1;
-    *GAMEOVER.lock() = false;
-    *WINNER.lock() = false;
-
-
-    
-    // Add any additional state reset logic here
-
+    // remove enemy bullets
+    let mut enemy_bullets_guard = ENEMY_BULLETS.lock();
+    let mut enemy_bullets = enemy_bullets_guard.borrow_mut();
+    for bullet in enemy_bullets.iter_mut() {
+        *bullet = None;
+    }
 }
