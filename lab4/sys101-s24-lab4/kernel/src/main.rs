@@ -21,7 +21,7 @@ use pc_keyboard::DecodedKey;
 use x86_64::registers::control::Cr3;
 use x86_64::structures::paging::PageTable;
 use x86_64::VirtAddr;
-const HEAP_SIZE: usize = 10000 * 1024; // 100 KiB
+const HEAP_SIZE: usize = 1000 * 1024; // 100 KiB
 
 const BOOTLOADER_CONFIG: BootloaderConfig = {
     let mut config = BootloaderConfig::new_default();
@@ -363,6 +363,13 @@ fn key(key: DecodedKey) {
                             (0xad, 0xd8, 0xe6),
                         ));
                     }
+                }
+            }
+            if (character == 'r' || character == 'R') {
+                let mut game_over = GAMEOVER.lock();
+                let mut winner = WINNER.lock();
+                if (*game_over || *winner) {
+                    reset_game();
                 }
             }
         }
@@ -1037,11 +1044,18 @@ fn display_game_over() {
     let mut writer = screenwriter();
     writer.clear(); // Clear the entire screen
 
+    // set player to None
+    // let mut player = PLAYER.lock();
+    // player.erase(&mut writer, (0, 0, 0));
+    // *player = Player::new(0, 0, 0, 0, (0, 0, 0));
+
     // Set the position for the Game Over message
     let message_x = writer.info.width / 2 - 40; // Adjust as needed
     let message_y = writer.info.height / 2;
     writer.set_position(message_x, message_y);
     let _ = write!(writer, "GAME OVER");
+    writer.set_position(message_x - 35, message_y + 20); // Adjust Y position for next line
+    let _ = write!(writer, "Press R to Restart");
 
     // // Display the Retry message
     // writer.set_position(message_x - 30, message_y + 20); // Adjust Y position for next line
@@ -1059,6 +1073,8 @@ fn display_winner() {
     let message_y = writer.info.height / 2;
     writer.set_position(message_x, message_y);
     let _ = write!(writer, "YOU WIN!");
+    writer.set_position(message_x - 35, message_y + 20); // Adjust Y position for next line
+    let _ = write!(writer, "Press R to Restart");
 
     // Optionally display a restart message or any other information
 }
@@ -1076,4 +1092,88 @@ fn are_enemies_remaining() -> bool {
     }
 
     false // No enemies remaining
+}
+
+fn reset_game() {
+    // Clear the screen
+    let mut writer = screenwriter();
+    writer.clear();
+    // let frame_info = writer.info;
+    // let center_x = frame_info.width / 2;
+    // let center_y = frame_info.height - 100;
+    // let player_width = 40;
+    // let player_height = 40;
+    // let player_color = (0xff, 0, 0);
+    // let mut player = PLAYER.lock();
+    // *player = Player::new(center_x - player_width / 2, center_y - player_height / 2, player_width, player_height, player_color);
+    // player.draw(&mut writer);
+
+    // restore enemies at the top center
+    let mut enemies_guard = ENEMIES.lock();
+    let mut enemies = enemies_guard.borrow_mut();
+    let frame_info = writer.info;
+    let enemy_width = 35;
+    let enemy_height = 35;
+    let horizontal_spacing = 10;
+    let vertical_spacing = 10;
+    let enemy_color = (0, 0, 0xff);
+    let total_enemies_width = (enemy_width + horizontal_spacing) * 15 - horizontal_spacing;
+    let start_x = (frame_info.width - total_enemies_width) / 2;
+    for i in 0..ROWS {
+        for j in 0..15 {
+            let enemy_x = start_x + j * (enemy_width + horizontal_spacing);
+            let enemy_y = 50 + i * (enemy_height + vertical_spacing);
+            enemies[i][j] = Some(Enemy::new(
+                enemy_x,
+                enemy_y,
+                enemy_width,
+                enemy_height,
+                enemy_color,
+            ));
+            enemies[i][j].as_ref().unwrap().draw(&mut writer);
+        }
+    }
+
+    // restore barriers
+    let mut barriers_guard = BARRIERS.lock();
+    let mut barriers = barriers_guard.borrow_mut();
+    let barrier_width = 30;
+    let barrier_height = 20;
+    let barrier_color = (0x80, 0x80, 0x80);
+    let barrier_spacing = 20;
+    let total_barriers_width = (barrier_width + barrier_spacing) * BARRIER_COLS - barrier_spacing;
+    let start_x = (frame_info.width - total_barriers_width) / 2;
+    for i in 0..BARRIER_ROWS {
+        for j in 0..BARRIER_COLS {
+            let mut barrier_x = start_x + j * (barrier_width + barrier_spacing);
+            if i % 2 == 0 {
+                barrier_x += 30;
+            } else {
+                barrier_x -= 30;
+            }
+            let barrier_y_offset = 200;
+            let barrier_y = frame_info.height - barrier_y_offset - i * (barrier_height + barrier_spacing);
+            barriers[i][j] = Some(Barrier::new(
+                barrier_x,
+                barrier_y,
+                barrier_width,
+                barrier_height,
+                barrier_color,
+            ));
+            barriers[i][j].as_ref().unwrap().draw(&mut writer);
+        }
+    }
+
+
+    *SCORE.lock() = 0;
+    *TICK_COUNTER1.lock() = 0;
+    *TICK_COUNTER2.lock() = 0;
+    *ENEMY_DX.lock() = 1;
+    *GAMEOVER.lock() = false;
+    *WINNER.lock() = false;
+
+
+    
+    // Add any additional state reset logic here
+
 }
