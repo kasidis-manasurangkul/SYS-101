@@ -208,7 +208,7 @@ fn start() {
     player.y = center_y - player_height / 2;
     player.draw(screenwriter());
 
-    let mut enemies_guard = ENEMIES.lock();
+    let enemies_guard = ENEMIES.lock();
     let mut enemies = enemies_guard.borrow_mut();
 
     // Enemy and spacing dimensions
@@ -250,7 +250,7 @@ fn start() {
     let total_barriers_width = (barrier_width + barrier_spacing) * BARRIER_COLS - barrier_spacing;
     let start_x = (frame_info.width - total_barriers_width) / 2;
 
-    let mut barriers_guard = BARRIERS.lock();
+    let barriers_guard = BARRIERS.lock();
     let mut barriers = barriers_guard.borrow_mut();
 
     // Draw barriers with new spacing
@@ -328,8 +328,6 @@ fn tick() {
 
 fn key(key: DecodedKey) {
     let mut player = PLAYER.lock();
-    // *player_moved = true;
-    let Writer = screenwriter();
     match key {
         DecodedKey::RawKey(code) => {
             let frame_info = screenwriter().info;
@@ -338,7 +336,7 @@ fn key(key: DecodedKey) {
                     // write!(Writer, "left").unwrap();
                     let mut game_over = GAMEOVER.lock();
                     let mut winner = WINNER.lock();
-                    if (*game_over || *winner) {
+                    if *game_over || *winner {
                         reset_game();
                         *game_over = false;
                         *winner = false;
@@ -349,7 +347,7 @@ fn key(key: DecodedKey) {
                 pc_keyboard::KeyCode::ArrowRight if player.x + player.width < frame_info.width => {
                     let mut game_over = GAMEOVER.lock();
                     let mut winner = WINNER.lock();
-                    if (*game_over || *winner) {
+                    if *game_over || *winner {
                         reset_game();
                         *game_over = false;
                         *winner = false;
@@ -363,7 +361,7 @@ fn key(key: DecodedKey) {
         DecodedKey::Unicode(character) => {
             if character == ' ' {
                 // Handle space bar press
-                let mut bullets_guard = BULLETS.lock();
+                let bullets_guard = BULLETS.lock();
                 let mut bullets = bullets_guard.borrow_mut();
                 // Add a new bullet if under the limit
                 if bullets.iter().filter(|x| x.is_some()).count() < 10 {
@@ -537,11 +535,11 @@ fn check_collision_between_player_bullet_and_barrier(bullet: &Bullet, barrier: &
 
 fn bullet_movement() {
     let mut writer = screenwriter();
-    let mut bullets_guard = BULLETS.lock();
+    let bullets_guard = BULLETS.lock();
     let mut bullets = bullets_guard.borrow_mut();
-    let mut enemies_guard = ENEMIES.lock();
+    let enemies_guard = ENEMIES.lock();
     let mut enemies = enemies_guard.borrow_mut();
-    let mut barriers_guard = BARRIERS.lock();
+    let barriers_guard = BARRIERS.lock();
     let mut barriers = barriers_guard.borrow_mut();
 
     let mut bullets_to_remove = Vec::new();
@@ -690,7 +688,7 @@ impl Enemy {
 }
 
 fn enemy_movement() {
-    let mut enemies_guard = ENEMIES.lock();
+    let enemies_guard = ENEMIES.lock();
     let mut enemies = enemies_guard.borrow_mut();
     let mut enemy_dx = ENEMY_DX.lock();
     let frame_info = screenwriter().info;
@@ -794,9 +792,9 @@ fn init_enemy_bullet_array() -> [Option<EnemyBullet>; 10] {
 fn enemy_shoot() {
     // Example: Random enemy shoots a bullet
     // This is a basic example, consider a more sophisticated approach
-    let mut enemies_guard = ENEMIES.lock();
+    let enemies_guard = ENEMIES.lock();
     let enemies = enemies_guard.borrow();
-    let mut enemy_bullets_guard = ENEMY_BULLETS.lock();
+    let enemy_bullets_guard = ENEMY_BULLETS.lock();
     let mut enemy_bullets = enemy_bullets_guard.borrow_mut();
 
     if let Some((x, y)) = select_random_enemy_position(&*enemies) {
@@ -833,14 +831,13 @@ fn select_random_enemy_position(enemies: &[[Option<Enemy>; 15]]) -> Option<(usiz
 
 fn enemy_bullet_movement() {
     let mut writer = screenwriter();
-    let mut enemy_bullets_guard = ENEMY_BULLETS.lock();
+    let enemy_bullets_guard = ENEMY_BULLETS.lock();
     let mut enemy_bullets = enemy_bullets_guard.borrow_mut();
-    let mut barriers_guard = BARRIERS.lock();
+    let barriers_guard = BARRIERS.lock();
     let mut barriers = barriers_guard.borrow_mut();
 
     let mut bullets_to_remove = Vec::new();
     let mut barriers_to_remove = Vec::new();
-    let mut game_over = false;
 
     let player = PLAYER.lock();
 
@@ -1022,7 +1019,7 @@ fn init_barrier_array() -> [[Option<Barrier>; BARRIER_COLS]; BARRIER_ROWS] {
 }
 
 fn display_score() {
-    let mut writer = screenwriter();
+    let writer = screenwriter();
 
     // Set the cursor position for score display at the top left
     let score_display_x = 10; // A small margin from the left edge
@@ -1045,7 +1042,7 @@ fn enemy_killed() {
 }
 
 fn display_game_over() {
-    let mut writer = screenwriter();
+    let writer = screenwriter();
     writer.clear(); // Clear the entire screen
 
     // set player to None
@@ -1069,7 +1066,7 @@ fn display_game_over() {
 fn display_winner() {
     let mut winner = WINNER.lock();
     *winner = true;
-    let mut writer = screenwriter();
+    let writer = screenwriter();
     writer.clear(); // Clear the screen
 
     // Set the position for the winning message
@@ -1100,7 +1097,7 @@ fn are_enemies_remaining() -> bool {
 fn reset_game() {
     let frame_info = screenwriter().info;
     // restore enemies
-    let mut enemies_guard = ENEMIES.lock();
+    let enemies_guard = ENEMIES.lock();
     let mut enemies = enemies_guard.borrow_mut();
 
     // Enemy and spacing dimensions
@@ -1143,7 +1140,7 @@ fn reset_game() {
     let total_barriers_width = (barrier_width + barrier_spacing) * BARRIER_COLS - barrier_spacing;
     let start_x = (frame_info.width - total_barriers_width) / 2;
 
-    let mut barriers_guard = BARRIERS.lock();
+    let barriers_guard = BARRIERS.lock();
     let mut barriers = barriers_guard.borrow_mut();
 
     // Draw barriers with new spacing
@@ -1171,14 +1168,14 @@ fn reset_game() {
     }
 
     // remove bullets
-    let mut bullets_guard = BULLETS.lock();
+    let bullets_guard = BULLETS.lock();
     let mut bullets = bullets_guard.borrow_mut();
     for bullet in bullets.iter_mut() {
         *bullet = None;
     }
 
     // remove enemy bullets
-    let mut enemy_bullets_guard = ENEMY_BULLETS.lock();
+    let enemy_bullets_guard = ENEMY_BULLETS.lock();
     let mut enemy_bullets = enemy_bullets_guard.borrow_mut();
     for bullet in enemy_bullets.iter_mut() {
         *bullet = None;
