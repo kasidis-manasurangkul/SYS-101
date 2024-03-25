@@ -1,0 +1,1 @@
+To run program for assessment 2 using this repository, you can clone the repository. After cloning, navigate to the "lab4/sys101-s24-lab4" directory. Note that despite being part of Assessment 2, this directory is named "lab4/sys101-s24-lab4" because it was initially created as part of lab 4, hence the naming. Other folders in the repository are not related to Assessment 2.
